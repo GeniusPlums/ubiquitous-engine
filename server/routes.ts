@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateFlowFromPrompt } from "./openai";
 import { insertJourneySchema, insertCampaignSchema } from "@shared/schema";
+import { fromZodError } from "zod-validation-error";
 
 export function registerRoutes(app: Express): Server {
   // Journeys
@@ -18,20 +19,26 @@ export function registerRoutes(app: Express): Server {
   });
 
   app.post("/api/journeys", async (req, res) => {
-    const parsed = insertJourneySchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: "Invalid journey data" });
-    }
-
     try {
+      const parsed = insertJourneySchema.safeParse(req.body);
+      if (!parsed.success) {
+        const error = fromZodError(parsed.error);
+        return res.status(400).json({ message: error.message });
+      }
+
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(500).json({ message: "OpenAI API key not configured" });
+      }
+
       const flow = await generateFlowFromPrompt(parsed.data.prompt);
       const journey = await storage.createJourney({
         ...parsed.data,
         flow
       });
       res.json(journey);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to create journey" });
+    } catch (error: any) {
+      console.error("Journey creation error:", error);
+      res.status(500).json({ message: error.message || "Failed to create journey" });
     }
   });
 
@@ -48,16 +55,18 @@ export function registerRoutes(app: Express): Server {
   });
 
   app.post("/api/campaigns", async (req, res) => {
-    const parsed = insertCampaignSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: "Invalid campaign data" });
-    }
-
     try {
+      const parsed = insertCampaignSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const error = fromZodError(parsed.error);
+        return res.status(400).json({ message: error.message });
+      }
+
       const campaign = await storage.createCampaign(parsed.data);
       res.json(campaign);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to create campaign" });
+    } catch (error: any) {
+      console.error("Campaign creation error:", error);
+      res.status(500).json({ message: error.message || "Failed to create campaign" });
     }
   });
 

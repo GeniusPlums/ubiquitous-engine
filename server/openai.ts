@@ -42,6 +42,10 @@ const flowSchema = z.object({
 });
 
 export async function generateFlowFromPrompt(prompt: string): Promise<Flow> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("Missing OPENAI_API_KEY");
+  }
+
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -51,7 +55,8 @@ export async function generateFlowFromPrompt(prompt: string): Promise<Flow> {
           content: `You are a journey builder assistant. Convert user prompts into a flow diagram with nodes and edges. 
           Return a JSON object with nodes (id, type, position, data) and edges (id, source, target).
           Node types can be: trigger, email, condition, delay, or end.
-          Position nodes in a logical layout with x, y coordinates.`
+          Position nodes in a logical layout with x, y coordinates between 0 and 1000.
+          Each node must have a unique id and descriptive label.`
         },
         {
           role: "user",
@@ -70,6 +75,6 @@ export async function generateFlowFromPrompt(prompt: string): Promise<Flow> {
     return parsedFlow;
   } catch (error) {
     console.error("Error generating flow:", error);
-    throw error;
+    throw new Error("Failed to generate flow: " + (error as Error).message);
   }
 }
