@@ -7,7 +7,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, BarChart2, PieChart as PieChartIcon } from "lucide-react";
+import { Download, BarChart2, PieChartIcon } from "lucide-react";
 import type { Journey, JourneyMetrics, JourneyVariant, JourneyEvent } from "@shared/schema";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
