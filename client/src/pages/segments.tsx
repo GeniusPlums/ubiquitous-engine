@@ -18,62 +18,92 @@ import {
 } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Brain, Filter, Download, Upload, RefreshCw, X, FileDown } from "lucide-react";
+import { Brain, Filter, Download, Upload, RefreshCw, X, FileDown, Plus } from "lucide-react";
 import type { Segment } from "@shared/schema";
 
+// Enhanced condition schema with type-specific validation
 const conditionSchema = z.object({
   field: z.string(),
   operator: z.string(),
   value: z.string(),
-  type: z.string().optional(),
+  logicOperator: z.enum(["AND", "OR"]).optional(),
+  type: z.enum(["string", "number", "date", "boolean"]).default("string"),
   timeframe: z.string().optional(),
 });
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  type: z.enum(["manual", "ai"]),
-  conditions: z.array(conditionSchema).optional(),
+  type: z.enum(["manual", "ai", "dynamic"]),
+  conditions: z.array(z.object({
+    group: z.array(conditionSchema),
+    logicOperator: z.enum(["AND", "OR"]).default("AND"),
+  })).optional(),
   aiPrompt: z.string().optional(),
+  behaviorRules: z.array(z.object({
+    event: z.string(),
+    threshold: z.number(),
+    timeframe: z.string(),
+  })).optional(),
 });
 
 const AVAILABLE_FIELDS = [
-  { label: "Email", value: "email" },
-  { label: "Country", value: "country" },
-  { label: "Sign Up Date", value: "signUpDate" },
-  { label: "Last Activity", value: "lastActivity" },
-  { label: "Total Purchases", value: "totalPurchases" },
+  { label: "Email", value: "email", type: "string" },
+  { label: "Country", value: "country", type: "string" },
+  { label: "Sign Up Date", value: "signUpDate", type: "date" },
+  { label: "Last Activity", value: "lastActivity", type: "date" },
+  { label: "Total Purchases", value: "totalPurchases", type: "number" },
+  { label: "Last Purchase Date", value: "lastPurchaseDate", type: "date" },
+  { label: "Average Order Value", value: "averageOrderValue", type: "number" },
+  { label: "Email Subscribed", value: "emailSubscribed", type: "boolean" },
+  { label: "Engagement Score", value: "engagementScore", type: "number" },
 ];
 
-const OPERATORS = [
-  { label: "Equals", value: "equals" },
-  { label: "Contains", value: "contains" },
-  { label: "Greater Than", value: "gt" },
-  { label: "Less Than", value: "lt" },
-  { label: "Between", value: "between" },
-];
-
-const downloadTemplate = () => {
-  const headers = ["email", "country", "signUpDate", "lastActivity", "totalPurchases"];
-  const sampleData = ["user@example.com", "US", "2024-01-01", "2024-02-09", "5"];
-
-  const csvContent = [
-    headers.join(","),
-    sampleData.join(",")
-  ].join("\n");
-
-  const blob = new Blob([csvContent], { type: 'text/csv' });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "segment-template.csv";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+const OPERATORS = {
+  string: [
+    { label: "Equals", value: "equals" },
+    { label: "Contains", value: "contains" },
+    { label: "Starts with", value: "startsWith" },
+    { label: "Ends with", value: "endsWith" },
+    { label: "Is empty", value: "isEmpty" },
+    { label: "Is not empty", value: "isNotEmpty" },
+  ],
+  number: [
+    { label: "Equals", value: "equals" },
+    { label: "Greater than", value: "gt" },
+    { label: "Less than", value: "lt" },
+    { label: "Between", value: "between" },
+    { label: "Is empty", value: "isEmpty" },
+  ],
+  date: [
+    { label: "On", value: "on" },
+    { label: "Before", value: "before" },
+    { label: "After", value: "after" },
+    { label: "Between", value: "between" },
+    { label: "In the last", value: "inLast" },
+    { label: "Not in the last", value: "notInLast" },
+  ],
+  boolean: [
+    { label: "Is", value: "equals" },
+  ],
 };
 
+const TIME_UNITS = [
+  { label: "Days", value: "days" },
+  { label: "Weeks", value: "weeks" },
+  { label: "Months", value: "months" },
+];
+
+const BEHAVIOR_EVENTS = [
+  { label: "Page View", value: "pageView" },
+  { label: "Email Open", value: "emailOpen" },
+  { label: "Email Click", value: "emailClick" },
+  { label: "Purchase", value: "purchase" },
+  { label: "Cart Abandon", value: "cartAbandon" },
+];
+
 export default function Segments() {
-  const [activeTab, setActiveTab] = useState<"manual" | "ai">("manual");
+  const [activeTab, setActiveTab] = useState<"manual" | "ai" | "dynamic">("manual");
   const queryClient = useQueryClient();
 
   const { data: segments } = useQuery<Segment[]>({
@@ -84,7 +114,8 @@ export default function Segments() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       type: "manual",
-      conditions: [],
+      conditions: [{ group: [], logicOperator: "AND" }],
+      behaviorRules: [],
     },
   });
 
@@ -115,21 +146,70 @@ export default function Segments() {
     },
   });
 
-  const addCondition = () => {
+  const addConditionGroup = () => {
     const currentConditions = form.getValues("conditions") || [];
     form.setValue("conditions", [
       ...currentConditions,
+      { group: [], logicOperator: "AND" },
+    ]);
+  };
+
+  const addCondition = (groupIndex: number) => {
+    const currentConditions = form.getValues("conditions") || [];
+    const updatedConditions = [...currentConditions];
+    updatedConditions[groupIndex].group.push({
+      field: "",
+      operator: "equals",
+      value: "",
+      type: "string",
+    });
+    form.setValue("conditions", updatedConditions);
+  };
+
+  const removeCondition = (groupIndex: number, conditionIndex: number) => {
+    const currentConditions = form.getValues("conditions") || [];
+    const updatedConditions = [...currentConditions];
+    updatedConditions[groupIndex].group.splice(conditionIndex, 1);
+    form.setValue("conditions", updatedConditions);
+  };
+
+  const addBehaviorRule = () => {
+    const currentRules = form.getValues("behaviorRules") || [];
+    form.setValue("behaviorRules", [
+      ...currentRules,
       {
-        field: "",
-        operator: "equals",
-        value: "",
+        event: "",
+        threshold: 1,
+        timeframe: "7 days",
       },
     ]);
   };
 
-  const removeCondition = (index: number) => {
-    const currentConditions = form.getValues("conditions") || [];
-    form.setValue("conditions", currentConditions.filter((_, i) => i !== index));
+  const removeBehaviorRule = (index: number) => {
+    const currentRules = form.getValues("behaviorRules") || [];
+    form.setValue(
+      "behaviorRules",
+      currentRules.filter((_, i) => i !== index)
+    );
+  };
+
+  const downloadTemplate = () => {
+    const headers = ["email", "country", "signUpDate", "lastActivity", "totalPurchases"];
+    const sampleData = ["user@example.com", "US", "2024-01-01", "2024-02-09", "5"];
+
+    const csvContent = [
+      headers.join(","),
+      sampleData.join(",")
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "segment-template.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const handleExport = async (segmentId: number) => {
@@ -271,7 +351,7 @@ export default function Segments() {
             <CardDescription>Create a new audience segment</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "manual" | "ai")}>
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "manual" | "ai" | "dynamic")}>
               <TabsList className="mb-4">
                 <TabsTrigger value="manual">
                   <Filter className="h-4 w-4 mr-2" />
@@ -280,6 +360,10 @@ export default function Segments() {
                 <TabsTrigger value="ai">
                   <Brain className="h-4 w-4 mr-2" />
                   AI-Powered
+                </TabsTrigger>
+                <TabsTrigger value="dynamic">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Dynamic
                 </TabsTrigger>
               </TabsList>
 
@@ -315,11 +399,219 @@ export default function Segments() {
 
                   <TabsContent value="manual">
                     <div className="space-y-4">
-                      {form.watch("conditions")?.map((condition, index) => (
+                      {form.watch("conditions")?.map((conditionGroup, groupIndex) => (
+                        <Card key={groupIndex}>
+                          <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-sm">
+                                Condition Group {groupIndex + 1}
+                              </CardTitle>
+                              {groupIndex > 0 && (
+                                <FormField
+                                  control={form.control}
+                                  name={`conditions.${groupIndex}.logicOperator`}
+                                  render={({ field }) => (
+                                    <Select
+                                      value={field.value}
+                                      onValueChange={field.onChange}
+                                    >
+                                      <SelectTrigger className="w-24">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="AND">AND</SelectItem>
+                                        <SelectItem value="OR">OR</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                />
+                              )}
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2">
+                              {conditionGroup.group.map((condition, conditionIndex) => (
+                                <div key={conditionIndex} className="flex gap-2 items-start">
+                                  <FormField
+                                    control={form.control}
+                                    name={`conditions.${groupIndex}.group.${conditionIndex}.field`}
+                                    render={({ field }) => (
+                                      <FormItem className="flex-1">
+                                        <Select
+                                          value={field.value}
+                                          onValueChange={(value) => {
+                                            const fieldType = AVAILABLE_FIELDS.find(
+                                              (f) => f.value === value
+                                            )?.type;
+                                            form.setValue(
+                                              `conditions.${groupIndex}.group.${conditionIndex}.type`,
+                                              fieldType as any
+                                            );
+                                            field.onChange(value);
+                                          }}
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Select field" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {AVAILABLE_FIELDS.map((option) => (
+                                              <SelectItem
+                                                key={option.value}
+                                                value={option.value}
+                                              >
+                                                {option.label}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+
+                                  <FormField
+                                    control={form.control}
+                                    name={`conditions.${groupIndex}.group.${conditionIndex}.operator`}
+                                    render={({ field }) => (
+                                      <FormItem className="flex-1">
+                                        <Select
+                                          value={field.value}
+                                          onValueChange={field.onChange}
+                                        >
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Select operator" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {OPERATORS[
+                                              form.watch(
+                                                `conditions.${groupIndex}.group.${conditionIndex}.type`
+                                              ) as keyof typeof OPERATORS
+                                            ]?.map((option) => (
+                                              <SelectItem
+                                                key={option.value}
+                                                value={option.value}
+                                              >
+                                                {option.label}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+
+                                  <FormField
+                                    control={form.control}
+                                    name={`conditions.${groupIndex}.group.${conditionIndex}.value`}
+                                    render={({ field }) => (
+                                      <FormItem className="flex-1">
+                                        <FormControl>
+                                          {form.watch(
+                                            `conditions.${groupIndex}.group.${conditionIndex}.type`
+                                          ) === "date" ? (
+                                            <Input
+                                              {...field}
+                                              type="date"
+                                              placeholder="Value"
+                                            />
+                                          ) : form.watch(
+                                              `conditions.${groupIndex}.group.${conditionIndex}.type`
+                                            ) === "boolean" ? (
+                                            <Select
+                                              value={field.value}
+                                              onValueChange={field.onChange}
+                                            >
+                                              <SelectTrigger>
+                                                <SelectValue placeholder="Select value" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="true">Yes</SelectItem>
+                                                <SelectItem value="false">No</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          ) : (
+                                            <Input {...field} placeholder="Value" />
+                                          )}
+                                        </FormControl>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+
+                                  {form.watch(
+                                    `conditions.${groupIndex}.group.${conditionIndex}.operator`
+                                  ) === "inLast" && (
+                                    <FormField
+                                      control={form.control}
+                                      name={`conditions.${groupIndex}.group.${conditionIndex}.timeframe`}
+                                      render={({ field }) => (
+                                        <FormItem className="flex-1">
+                                          <Select
+                                            value={field.value}
+                                            onValueChange={field.onChange}
+                                          >
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Select timeframe" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {TIME_UNITS.map((unit) => (
+                                                <SelectItem
+                                                  key={unit.value}
+                                                  value={unit.value}
+                                                >
+                                                  {unit.label}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </FormItem>
+                                      )}
+                                    />
+                                  )}
+
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() =>
+                                      removeCondition(groupIndex, conditionIndex)
+                                    }
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ))}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => addCondition(groupIndex)}
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Condition
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={addConditionGroup}
+                      >
+                        Add Condition Group
+                      </Button>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="dynamic">
+                    <div className="space-y-4">
+                      {form.watch("behaviorRules")?.map((rule, index) => (
                         <div key={index} className="flex gap-2 items-start">
                           <FormField
                             control={form.control}
-                            name={`conditions.${index}.field`}
+                            name={`behaviorRules.${index}.event`}
                             render={({ field }) => (
                               <FormItem className="flex-1">
                                 <Select
@@ -327,68 +619,86 @@ export default function Segments() {
                                   onValueChange={field.onChange}
                                 >
                                   <SelectTrigger>
-                                    <SelectValue placeholder="Select field" />
+                                    <SelectValue placeholder="Select event" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {AVAILABLE_FIELDS.map((option) => (
-                                      <SelectItem key={option.value} value={option.value}>
-                                        {option.label}
+                                    {BEHAVIOR_EVENTS.map((event) => (
+                                      <SelectItem
+                                        key={event.value}
+                                        value={event.value}
+                                      >
+                                        {event.label}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
-                                <FormMessage />
                               </FormItem>
                             )}
                           />
+
                           <FormField
                             control={form.control}
-                            name={`conditions.${index}.operator`}
-                            render={({ field }) => (
-                              <FormItem className="flex-1">
-                                <Select
-                                  value={field.value}
-                                  onValueChange={field.onChange}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select operator" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {OPERATORS.map((option) => (
-                                      <SelectItem key={option.value} value={option.value}>
-                                        {option.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name={`conditions.${index}.value`}
+                            name={`behaviorRules.${index}.threshold`}
                             render={({ field }) => (
                               <FormItem className="flex-1">
                                 <FormControl>
-                                  <Input {...field} placeholder="Value" />
+                                  <Input
+                                    {...field}
+                                    type="number"
+                                    min="1"
+                                    placeholder="Threshold"
+                                    onChange={(e) =>
+                                      field.onChange(parseInt(e.target.value))
+                                    }
+                                  />
                                 </FormControl>
-                                <FormMessage />
                               </FormItem>
                             )}
                           />
+
+                          <FormField
+                            control={form.control}
+                            name={`behaviorRules.${index}.timeframe`}
+                            render={({ field }) => (
+                              <FormItem className="flex-1">
+                                <Select
+                                  value={field.value}
+                                  onValueChange={field.onChange}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select timeframe" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {TIME_UNITS.map((unit) => (
+                                      <SelectItem
+                                        key={unit.value}
+                                        value={`${7} ${unit.value}`}
+                                      >
+                                        Last {7} {unit.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </FormItem>
+                            )}
+                          />
+
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={() => removeCondition(index)}
+                            onClick={() => removeBehaviorRule(index)}
                           >
                             <X className="h-4 w-4" />
                           </Button>
                         </div>
                       ))}
-                      <Button type="button" variant="outline" onClick={addCondition}>
-                        Add Condition
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={addBehaviorRule}
+                      >
+                        Add Behavior Rule
                       </Button>
                     </div>
                   </TabsContent>
@@ -436,7 +746,7 @@ export default function Segments() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <p className="text-sm font-medium">Members</p>
                     <p className="text-2xl font-bold">{segment.metrics.totalMembers}</p>
@@ -444,6 +754,22 @@ export default function Segments() {
                   <div>
                     <p className="text-sm font-medium">Engagement Rate</p>
                     <p className="text-2xl font-bold">{segment.metrics.engagementRate}%</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Growth Rate</p>
+                    <p className="text-2xl font-bold">{segment.metrics.growthRate}%</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Conversion Rate</p>
+                    <p className="text-2xl font-bold">{segment.metrics.conversionRate}%</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Avg. Order Value</p>
+                    <p className="text-2xl font-bold">${segment.metrics.averageOrderValue}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Churn Risk</p>
+                    <p className="text-2xl font-bold">{segment.metrics.churnRisk}%</p>
                   </div>
                 </div>
               </CardContent>
