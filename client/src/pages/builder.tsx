@@ -22,16 +22,15 @@ export default function Builder() {
   const [selectedMode, setSelectedMode] = useState<"manual" | "ai">("manual");
 
   const addNode = useCallback((type: string) => {
-    const position = {
-      x: Math.random() * 500,
-      y: Math.random() * 500,
-    };
-
     const newNode = {
       id: `${type}-${Date.now()}`,
       type,
-      position,
+      position: {
+        x: Math.random() * 500,
+        y: Math.random() * 500,
+      },
       data: { label: `New ${type}` },
+      draggable: true,
     };
 
     setFlow((current) => ({
@@ -40,14 +39,10 @@ export default function Builder() {
     }));
   }, []);
 
-  const handleFlowChange = (updatedFlow: Flow) => {
-    setFlow(updatedFlow);
-  };
-
   return (
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-bold">Journey Builder</h1>
+        <h1 className="text-2xl font-bold">Journey Builder</h1>
         <Tabs value={selectedMode} onValueChange={(v) => setSelectedMode(v as "manual" | "ai")}>
           <TabsList>
             <TabsTrigger value="manual" className="flex items-center gap-2">
@@ -78,7 +73,7 @@ export default function Builder() {
                 </Button>
               ))}
             </div>
-            <FlowDiagram flow={flow} onFlowChange={handleFlowChange} />
+            <FlowDiagram flow={flow} onFlowChange={setFlow} />
             {flow.nodes.some(node => node.type === 'email') && (
               <EmailEditor 
                 onChange={(template) => {
@@ -92,7 +87,7 @@ export default function Builder() {
             <PromptInput onFlowGenerated={setFlow} />
             {flow.nodes.length > 0 && (
               <>
-                <FlowDiagram flow={flow} onFlowChange={handleFlowChange} />
+                <FlowDiagram flow={flow} onFlowChange={setFlow} />
                 {flow.nodes.some(node => node.type === 'email') && (
                   <EmailEditor 
                     onChange={(template) => {

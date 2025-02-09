@@ -84,8 +84,8 @@ const defaultEdgeOptions = {
 };
 
 export function FlowDiagram({ flow, onFlowChange }: FlowDiagramProps) {
-  const [nodes, setNodes] = useState<Node[]>(flow.nodes.map(node => ({ 
-    ...node, 
+  const [nodes, setNodes] = useState<Node[]>(flow.nodes.map(node => ({
+    ...node,
     draggable: true,
     connectable: true,
   })));
