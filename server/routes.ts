@@ -2,7 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateFlowFromPrompt } from "./openai";
-import { insertJourneySchema, insertCampaignSchema, insertEmailTemplateSchema } from "@shared/schema";
+import { 
+  insertJourneySchema, insertCampaignSchema, insertEmailTemplateSchema,
+  insertJourneyMetricsSchema, insertJourneyVariantSchema, insertJourneyEventSchema 
+} from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import OpenAI from "openai";
 
@@ -27,18 +30,116 @@ export function registerRoutes(app: Express): Server {
     res.json(journey);
   });
 
+  // Journey metrics routes
+  app.get("/api/journeys/:id/metrics", async (req, res) => {
+    try {
+      const metrics = await storage.getJourneyMetrics(parseInt(req.params.id));
+      if (!metrics) {
+        return res.status(404).json({ message: "Metrics not found" });
+      }
+      res.json(metrics);
+    } catch (error: any) {
+      console.error("Error fetching metrics:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/journeys/:id/metrics", async (req, res) => {
+    try {
+      const journeyId = parseInt(req.params.id);
+      const parsed = insertJourneyMetricsSchema.safeParse({ ...req.body, journeyId });
+      if (!parsed.success) {
+        const error = fromZodError(parsed.error);
+        return res.status(400).json({ message: error.message });
+      }
+
+      const metrics = await storage.updateJourneyMetrics(journeyId, parsed.data);
+      res.json(metrics);
+    } catch (error: any) {
+      console.error("Error updating metrics:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Journey variants routes
+  app.get("/api/journeys/:id/variants", async (req, res) => {
+    try {
+      const variants = await storage.getJourneyVariants(parseInt(req.params.id));
+      res.json(variants);
+    } catch (error: any) {
+      console.error("Error fetching variants:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/journeys/:id/variants", async (req, res) => {
+    try {
+      const journeyId = parseInt(req.params.id);
+      const parsed = insertJourneyVariantSchema.safeParse({ ...req.body, journeyId });
+      if (!parsed.success) {
+        const error = fromZodError(parsed.error);
+        return res.status(400).json({ message: error.message });
+      }
+
+      const variant = await storage.createJourneyVariant(parsed.data);
+      res.json(variant);
+    } catch (error: any) {
+      console.error("Error creating variant:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/journeys/variants/:id", async (req, res) => {
+    try {
+      const variantId = parseInt(req.params.id);
+      const variant = await storage.updateJourneyVariant(variantId, req.body);
+      if (!variant) {
+        return res.status(404).json({ message: "Variant not found" });
+      }
+      res.json(variant);
+    } catch (error: any) {
+      console.error("Error updating variant:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Journey events routes
+  app.get("/api/journeys/:id/events", async (req, res) => {
+    try {
+      const events = await storage.getJourneyEvents(parseInt(req.params.id));
+      res.json(events);
+    } catch (error: any) {
+      console.error("Error fetching events:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/journeys/:id/events", async (req, res) => {
+    try {
+      const journeyId = parseInt(req.params.id);
+      const parsed = insertJourneyEventSchema.safeParse({ ...req.body, journeyId });
+      if (!parsed.success) {
+        const error = fromZodError(parsed.error);
+        return res.status(400).json({ message: error.message });
+      }
+
+      const event = await storage.createJourneyEvent(parsed.data);
+      res.json(event);
+    } catch (error: any) {
+      console.error("Error creating event:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/journeys", async (req, res) => {
     try {
-      // First validate the basic journey data without flow
       const { prompt, ...journeyData } = req.body;
       if (!prompt) {
         return res.status(400).json({ message: "Prompt is required" });
       }
 
-      // Generate flow from the prompt
       const flow = await generateFlowFromPrompt(prompt);
 
-      // Now validate the complete journey data including the generated flow
       const completeJourneyData = {
         ...journeyData,
         prompt,
@@ -137,7 +238,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // New route for generating email template from prompt
   app.post("/api/templates/generate", async (req, res) => {
     try {
       if (!openai) {
@@ -168,7 +268,6 @@ export function registerRoutes(app: Express): Server {
         throw new Error("Failed to generate template");
       }
 
-      // Parse the response to extract subject and body
       const subjectMatch = response.match(/Subject:(.*?)(?=Body:|$)/s);
       const bodyMatch = response.match(/Body:(.*?)$/s);
 

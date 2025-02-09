@@ -7,6 +7,7 @@ import Dashboard from "@/pages/dashboard";
 import Builder from "@/pages/builder";
 import Campaigns from "@/pages/campaigns";
 import Templates from "@/pages/templates";
+import Analytics from "@/pages/analytics";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/builder" component={Builder} />
       <Route path="/campaigns" component={Campaigns} />
       <Route path="/templates" component={Templates} />
+      <Route path="/analytics" component={Analytics} />
       <Route component={NotFound} />
     </Switch>
   );

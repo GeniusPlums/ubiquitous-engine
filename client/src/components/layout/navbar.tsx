@@ -33,6 +33,11 @@ export function Navbar() {
                 <Button variant="ghost">Email Templates</Button>
               </Link>
             </NavigationMenuItem>
+            <NavigationMenuItem>
+              <Link href="/analytics">
+                <Button variant="ghost">Analytics</Button>
+              </Link>
+            </NavigationMenuItem>
           </NavigationMenuList>
         </NavigationMenu>
       </div>
