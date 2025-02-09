@@ -1,4 +1,6 @@
 import { journeys, campaigns, type Journey, type InsertJourney, type Campaign, type InsertCampaign } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
   // Journey operations
@@ -14,94 +16,64 @@ export interface IStorage {
   updateCampaign(id: number, campaign: Partial<Campaign>): Promise<Campaign | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private journeys: Map<number, Journey>;
-  private campaigns: Map<number, Campaign>;
-  private journeyId: number;
-  private campaignId: number;
-
-  constructor() {
-    this.journeys = new Map();
-    this.campaigns = new Map();
-    this.journeyId = 1;
-    this.campaignId = 1;
-
-    // Add some mock data
-    this.createJourney({
-      name: "Welcome Flow",
-      description: "Onboard new users",
-      prompt: "Create a welcome flow that sends an email on signup",
-      flow: {
-        nodes: [],
-        edges: []
-      }
-    });
-  }
-
+export class DatabaseStorage implements IStorage {
+  // Journey operations
   async getJourneys(): Promise<Journey[]> {
-    return Array.from(this.journeys.values());
+    return await db.select().from(journeys);
   }
 
   async getJourney(id: number): Promise<Journey | undefined> {
-    return this.journeys.get(id);
+    const [journey] = await db.select().from(journeys).where(eq(journeys.id, id));
+    return journey;
   }
 
   async createJourney(journey: InsertJourney): Promise<Journey> {
-    const id = this.journeyId++;
-    const newJourney = {
-      ...journey,
-      id,
-      status: "draft",
-      description: journey.description || null
-    } as Journey;
-
-    this.journeys.set(id, newJourney);
+    const [newJourney] = await db
+      .insert(journeys)
+      .values({ ...journey, status: "draft" })
+      .returning();
     return newJourney;
   }
 
   async updateJourney(id: number, update: Partial<Journey>): Promise<Journey | undefined> {
-    const journey = this.journeys.get(id);
-    if (!journey) return undefined;
-
-    const updatedJourney = { ...journey, ...update };
-    this.journeys.set(id, updatedJourney);
-    return updatedJourney;
+    const [updated] = await db
+      .update(journeys)
+      .set(update)
+      .where(eq(journeys.id, id))
+      .returning();
+    return updated;
   }
 
+  // Campaign operations
   async getCampaigns(): Promise<Campaign[]> {
-    return Array.from(this.campaigns.values());
+    return await db.select().from(campaigns);
   }
 
   async getCampaign(id: number): Promise<Campaign | undefined> {
-    return this.campaigns.get(id);
+    const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, id));
+    return campaign;
   }
 
   async createCampaign(campaign: InsertCampaign): Promise<Campaign> {
-    const id = this.campaignId++;
-    const newCampaign = {
-      ...campaign,
-      id,
-      status: "draft",
-      journeyId: campaign.journeyId || null,
-      metrics: {
-        sent: 0,
-        opened: 0,
-        clicked: 0
-      }
-    } as Campaign;
-
-    this.campaigns.set(id, newCampaign);
+    const [newCampaign] = await db
+      .insert(campaigns)
+      .values({
+        ...campaign,
+        status: "draft",
+        metrics: { sent: 0, opened: 0, clicked: 0 }
+      })
+      .returning();
     return newCampaign;
   }
 
   async updateCampaign(id: number, update: Partial<Campaign>): Promise<Campaign | undefined> {
-    const campaign = this.campaigns.get(id);
-    if (!campaign) return undefined;
-
-    const updatedCampaign = { ...campaign, ...update };
-    this.campaigns.set(id, updatedCampaign);
-    return updatedCampaign;
+    const [updated] = await db
+      .update(campaigns)
+      .set(update)
+      .where(eq(campaigns.id, id))
+      .returning();
+    return updated;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
