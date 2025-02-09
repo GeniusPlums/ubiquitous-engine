@@ -1,11 +1,15 @@
-export interface FlowNode {
+import { Node, Edge } from 'reactflow';
+
+export interface FlowNode extends Node {
   id: string;
   type: string;
   position: { x: number; y: number };
   data: { label: string; [key: string]: any };
+  draggable?: boolean;
+  connectable?: boolean;
 }
 
-export interface FlowEdge {
+export interface FlowEdge extends Edge {
   id: string;
   source: string;
   target: string;

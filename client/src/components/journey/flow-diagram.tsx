@@ -5,8 +5,8 @@ import ReactFlow, {
   addEdge, MiniMap, Panel
 } from "reactflow";
 import "reactflow/dist/style.css";
-import type { Flow } from "@/lib/types";
-import { useCallback, useState } from "react";
+import type { Flow, FlowNode } from "@/lib/types";
+import { useCallback, useState, useEffect } from "react";
 import { MessageSquare, Mail, Bell, Clock, AlertCircle, Check, ZoomIn, ZoomOut, Move } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -84,20 +84,36 @@ const defaultEdgeOptions = {
 };
 
 export function FlowDiagram({ flow, onFlowChange }: FlowDiagramProps) {
-  const [nodes, setNodes] = useState<Node[]>(flow.nodes.map(node => ({
-    ...node,
-    draggable: true,
-    connectable: true,
-  })));
+  // Initialize nodes with draggable and connectable properties
+  const [nodes, setNodes] = useState<FlowNode[]>(() => 
+    flow.nodes.map(node => ({
+      ...node,
+      draggable: true,
+      connectable: true,
+    }))
+  );
   const [edges, setEdges] = useState<Edge[]>(flow.edges);
   const [zoom, setZoom] = useState(1);
+
+  // Update nodes when flow prop changes
+  useEffect(() => {
+    setNodes(flow.nodes.map(node => ({
+      ...node,
+      draggable: true,
+      connectable: true,
+    })));
+    setEdges(flow.edges);
+  }, [flow]);
 
   // Handle node changes (position, selection, etc.)
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       const updatedNodes = applyNodeChanges(changes, nodes);
       setNodes(updatedNodes);
-      onFlowChange?.({ nodes: updatedNodes, edges });
+      onFlowChange?.({ 
+        nodes: updatedNodes, 
+        edges 
+      });
     },
     [nodes, edges, onFlowChange]
   );
@@ -107,7 +123,10 @@ export function FlowDiagram({ flow, onFlowChange }: FlowDiagramProps) {
     (changes: EdgeChange[]) => {
       const updatedEdges = applyEdgeChanges(changes, edges);
       setEdges(updatedEdges);
-      onFlowChange?.({ nodes, edges: updatedEdges });
+      onFlowChange?.({ 
+        nodes, 
+        edges: updatedEdges 
+      });
     },
     [nodes, edges, onFlowChange]
   );
@@ -117,7 +136,10 @@ export function FlowDiagram({ flow, onFlowChange }: FlowDiagramProps) {
     (connection: Connection) => {
       const updatedEdges = addEdge(connection, edges);
       setEdges(updatedEdges);
-      onFlowChange?.({ nodes, edges: updatedEdges });
+      onFlowChange?.({ 
+        nodes, 
+        edges: updatedEdges 
+      });
     },
     [nodes, edges, onFlowChange]
   );
@@ -139,12 +161,12 @@ export function FlowDiagram({ flow, onFlowChange }: FlowDiagramProps) {
         minZoom={0.1}
         maxZoom={4}
         onZoomChange={setZoom}
-        draggable={true}
-        panOnDrag={true}
-        selectable={true}
-        zoomOnScroll={true}
+        draggable
+        panOnDrag
+        selectable
+        zoomOnScroll
         panOnScroll={false}
-        preventScrolling={true}
+        preventScrolling
       >
         <Panel position="top-right" className="flex gap-2">
           <Button
