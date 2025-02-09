@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Brain, Filter, Download, Upload, RefreshCw, X } from "lucide-react";
+import { Brain, Filter, Download, Upload, RefreshCw, X, FileDown } from "lucide-react";
 import type { Segment } from "@shared/schema";
 
 const conditionSchema = z.object({
@@ -52,6 +52,25 @@ const OPERATORS = [
   { label: "Less Than", value: "lt" },
   { label: "Between", value: "between" },
 ];
+
+const downloadTemplate = () => {
+  const headers = ["email", "country", "signUpDate", "lastActivity", "totalPurchases"];
+  const sampleData = ["user@example.com", "US", "2024-01-01", "2024-02-09", "5"];
+
+  const csvContent = [
+    headers.join(","),
+    sampleData.join(",")
+  ].join("\n");
+
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "segment-template.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
 
 export default function Segments() {
   const [activeTab, setActiveTab] = useState<"manual" | "ai">("manual");
@@ -129,27 +148,78 @@ export default function Segments() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const response = await fetch("/api/segments/import", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (response.ok) {
-      queryClient.invalidateQueries({ queryKey: ["/api/segments"] });
+    // Validate file type
+    if (!file.name.endsWith('.csv')) {
       toast({
-        title: "Success",
-        description: "Audience list imported successfully",
-      });
-    } else {
-      toast({
-        title: "Error",
-        description: "Failed to import audience list",
+        title: "Invalid File",
+        description: "Please upload a CSV file",
         variant: "destructive",
       });
+      return;
     }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Maximum file size is 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Read and validate CSV content
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split('\n');
+
+      // Validate headers
+      const headers = lines[0].toLowerCase().trim().split(',');
+      const requiredHeaders = ['email', 'country'];
+      const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+
+      if (missingHeaders.length > 0) {
+        toast({
+          title: "Invalid CSV Format",
+          description: `Missing required columns: ${missingHeaders.join(', ')}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Proceed with upload
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const response = await fetch("/api/segments/import", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (response.ok) {
+          queryClient.invalidateQueries({ queryKey: ["/api/segments"] });
+          toast({
+            title: "Success",
+            description: "Audience list imported successfully",
+          });
+          // Reset file input
+          event.target.value = '';
+        } else {
+          const error = await response.text();
+          throw new Error(error);
+        }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to import audience list",
+          variant: "destructive",
+        });
+      }
+    };
+
+    reader.readAsText(file);
   };
 
   return (
@@ -157,6 +227,10 @@ export default function Segments() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold">Audience Segments</h1>
         <div className="flex gap-4">
+          <Button variant="outline" onClick={downloadTemplate}>
+            <FileDown className="h-4 w-4 mr-2" />
+            Download Template
+          </Button>
           <Button variant="outline" onClick={() => document.getElementById("import-file")?.click()}>
             <Upload className="h-4 w-4 mr-2" />
             Import
@@ -170,6 +244,25 @@ export default function Segments() {
           />
         </div>
       </div>
+
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>CSV Import Guidelines</CardTitle>
+          <CardDescription>
+            Follow these guidelines to ensure successful import of your audience data:
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="list-disc pl-6 space-y-2">
+            <li>Use the template file as a starting point</li>
+            <li>Required columns: email, country</li>
+            <li>Date format: YYYY-MM-DD (e.g., 2024-02-09)</li>
+            <li>Numbers should be plain digits (e.g., 5)</li>
+            <li>First row must contain column headers</li>
+            <li>UTF-8 encoding is required</li>
+          </ul>
+        </CardContent>
+      </Card>
 
       <div className="grid md:grid-cols-2 gap-8">
         <Card>
