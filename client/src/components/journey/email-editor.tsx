@@ -27,6 +27,7 @@ interface EmailTemplate {
 interface EmailEditorProps {
   onChange: (template: EmailTemplate) => void;
   onSave?: (template: EmailTemplate) => void;
+  initialAIMode?: boolean;
 }
 
 const availableVariables = [
@@ -36,7 +37,7 @@ const availableVariables = [
   "{{date}}",
 ];
 
-export function EmailEditor({ onChange, onSave }: EmailEditorProps) {
+export function EmailEditor({ onChange, onSave, initialAIMode = false }: EmailEditorProps) {
   const [subject, setSubject] = useState("");
   const [isPreview, setIsPreview] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -154,33 +155,36 @@ export function EmailEditor({ onChange, onSave }: EmailEditorProps) {
         <CardTitle>Email Template</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Prompt-based generation */}
-        <div className="space-y-2">
-          <Label htmlFor="prompt">Generate from Prompt</Label>
-          <div className="flex gap-2">
-            <Textarea
-              id="prompt"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe the email template you want to generate..."
-              className="flex-1"
-            />
-            <Button 
-              onClick={generateFromPrompt}
-              disabled={isGenerating}
-              className="self-start"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating
-                </>
-              ) : (
-                "Generate"
-              )}
-            </Button>
+        {/* Show prompt-based generation only in AI mode */}
+        {initialAIMode && (
+          <div className="space-y-2">
+            <Label htmlFor="prompt">Generate from Prompt</Label>
+            <div className="flex gap-2">
+              <Textarea
+                id="prompt"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Describe the email template you want to generate..."
+                className="flex-1"
+                autoFocus
+              />
+              <Button 
+                onClick={generateFromPrompt}
+                disabled={isGenerating}
+                className="self-start"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating
+                  </>
+                ) : (
+                  "Generate"
+                )}
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="subject">Subject</Label>
