@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -14,6 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 
 interface EmailTemplate {
   subject: string;
@@ -36,6 +39,8 @@ const availableVariables = [
 export function EmailEditor({ onChange, onSave }: EmailEditorProps) {
   const [subject, setSubject] = useState("");
   const [isPreview, setIsPreview] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
 
   const editor = useEditor({
@@ -61,7 +66,7 @@ export function EmailEditor({ onChange, onSave }: EmailEditorProps) {
 
   const detectVariables = (content: string): string[] => {
     const matches = content.match(/{{[^}]+}}/g) || [];
-    return [...new Set(matches)];
+    return Array.from(new Set(matches));
   };
 
   const insertVariable = (variable: string) => {
@@ -96,6 +101,41 @@ export function EmailEditor({ onChange, onSave }: EmailEditorProps) {
     }
   };
 
+  const generateFromPrompt = async () => {
+    if (!prompt) {
+      toast({
+        title: "Error",
+        description: "Please enter a prompt first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const response = await apiRequest("POST", "/api/templates/generate", { prompt });
+      const data = await response.json();
+
+      if (editor) {
+        editor.commands.setContent(data.body);
+      }
+      setSubject(data.subject);
+
+      toast({
+        title: "Success",
+        description: "Template generated successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to generate template. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const previewContent = () => {
     if (!editor) return null;
     let content = editor.getHTML();
@@ -114,6 +154,34 @@ export function EmailEditor({ onChange, onSave }: EmailEditorProps) {
         <CardTitle>Email Template</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Prompt-based generation */}
+        <div className="space-y-2">
+          <Label htmlFor="prompt">Generate from Prompt</Label>
+          <div className="flex gap-2">
+            <Textarea
+              id="prompt"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Describe the email template you want to generate..."
+              className="flex-1"
+            />
+            <Button 
+              onClick={generateFromPrompt}
+              disabled={isGenerating}
+              className="self-start"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating
+                </>
+              ) : (
+                "Generate"
+              )}
+            </Button>
+          </div>
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="subject">Subject</Label>
           <Input

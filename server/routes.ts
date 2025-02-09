@@ -2,8 +2,17 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateFlowFromPrompt } from "./openai";
-import { insertJourneySchema, insertCampaignSchema } from "@shared/schema";
+import { insertJourneySchema, insertCampaignSchema, insertEmailTemplateSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
+import OpenAI from "openai";
+
+// Initialize OpenAI
+let openai: OpenAI | null = null;
+if (process.env.OPENAI_API_KEY) {
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  });
+}
 
 export function registerRoutes(app: Express): Server {
   // Journeys
@@ -75,6 +84,103 @@ export function registerRoutes(app: Express): Server {
     } catch (error: any) {
       console.error("Campaign creation error:", error);
       res.status(500).json({ message: error.message || "Failed to create campaign" });
+    }
+  });
+
+  // Email Templates
+  app.get("/api/templates", async (req, res) => {
+    try {
+      const templates = await storage.getEmailTemplates();
+      res.json(templates);
+    } catch (error: any) {
+      console.error("Template fetch error:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch templates" });
+    }
+  });
+
+  app.get("/api/templates/:id", async (req, res) => {
+    try {
+      const template = await storage.getEmailTemplate(parseInt(req.params.id));
+      if (!template) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+      res.json(template);
+    } catch (error: any) {
+      console.error("Template fetch error:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch template" });
+    }
+  });
+
+  app.post("/api/templates", async (req, res) => {
+    try {
+      const parsed = insertEmailTemplateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const error = fromZodError(parsed.error);
+        return res.status(400).json({ message: error.message });
+      }
+
+      const template = await storage.createEmailTemplate(parsed.data);
+      res.json(template);
+    } catch (error: any) {
+      console.error("Template creation error:", error);
+      res.status(500).json({ message: error.message || "Failed to create template" });
+    }
+  });
+
+  app.delete("/api/templates/:id", async (req, res) => {
+    try {
+      await storage.deleteEmailTemplate(parseInt(req.params.id));
+      res.status(204).end();
+    } catch (error: any) {
+      console.error("Template deletion error:", error);
+      res.status(500).json({ message: error.message || "Failed to delete template" });
+    }
+  });
+
+  // New route for generating email template from prompt
+  app.post("/api/templates/generate", async (req, res) => {
+    try {
+      if (!openai) {
+        return res.status(500).json({ message: "OpenAI API key not configured" });
+      }
+
+      const { prompt } = req.body;
+      if (!prompt) {
+        return res.status(400).json({ message: "Prompt is required" });
+      }
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert email template creator. Generate HTML email content based on the given prompt. Include appropriate variables like {{user.name}}, {{user.email}}, {{company.name}}, and {{date}} where relevant."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
+      });
+
+      const response = completion.choices[0]?.message?.content;
+      if (!response) {
+        throw new Error("Failed to generate template");
+      }
+
+      // Parse the response to extract subject and body
+      const subjectMatch = response.match(/Subject:(.*?)(?=Body:|$)/s);
+      const bodyMatch = response.match(/Body:(.*?)$/s);
+
+      const template = {
+        subject: subjectMatch ? subjectMatch[1].trim() : "Generated Email",
+        body: bodyMatch ? bodyMatch[1].trim() : response,
+      };
+
+      res.json(template);
+    } catch (error: any) {
+      console.error("Template generation error:", error);
+      res.status(500).json({ message: error.message || "Failed to generate template" });
     }
   });
 

@@ -1,4 +1,4 @@
-import { journeys, campaigns, type Journey, type InsertJourney, type Campaign, type InsertCampaign } from "@shared/schema";
+import { journeys, campaigns, emailTemplates, type Journey, type InsertJourney, type Campaign, type InsertCampaign, type EmailTemplate, type InsertEmailTemplate } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -14,6 +14,12 @@ export interface IStorage {
   getCampaign(id: number): Promise<Campaign | undefined>;
   createCampaign(campaign: InsertCampaign): Promise<Campaign>;
   updateCampaign(id: number, campaign: Partial<Campaign>): Promise<Campaign | undefined>;
+
+  // Email template operations
+  getEmailTemplates(): Promise<EmailTemplate[]>;
+  getEmailTemplate(id: number): Promise<EmailTemplate | undefined>;
+  createEmailTemplate(template: InsertEmailTemplate): Promise<EmailTemplate>;
+  deleteEmailTemplate(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -69,6 +75,28 @@ export class DatabaseStorage implements IStorage {
       .where(eq(campaigns.id, id))
       .returning();
     return updated;
+  }
+
+  // Email template operations
+  async getEmailTemplates(): Promise<EmailTemplate[]> {
+    return await db.select().from(emailTemplates);
+  }
+
+  async getEmailTemplate(id: number): Promise<EmailTemplate | undefined> {
+    const [template] = await db.select().from(emailTemplates).where(eq(emailTemplates.id, id));
+    return template;
+  }
+
+  async createEmailTemplate(template: InsertEmailTemplate): Promise<EmailTemplate> {
+    const [newTemplate] = await db
+      .insert(emailTemplates)
+      .values(template)
+      .returning();
+    return newTemplate;
+  }
+
+  async deleteEmailTemplate(id: number): Promise<void> {
+    await db.delete(emailTemplates).where(eq(emailTemplates.id, id));
   }
 }
 
