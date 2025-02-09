@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, jsonb, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, jsonb, timestamp, boolean, array } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -108,6 +108,61 @@ export const emailTemplates = pgTable("email_templates", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// New tables for audience segmentation
+export const segments = pgTable("segments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  type: text("type").notNull(), // 'manual' or 'ai'
+  conditions: jsonb("conditions").$type<Array<{
+    field: string;
+    operator: string;
+    value: any;
+    type?: string; // For behavioral conditions
+    timeframe?: string;
+  }>>().notNull(),
+  aiPrompt: text("ai_prompt"), // Used for AI-generated segments
+  metrics: jsonb("metrics").$type<{
+    totalMembers: number;
+    engagementRate: number;
+    conversionRate: number;
+    lastUpdated: string;
+  }>().notNull().default({
+    totalMembers: 0,
+    engagementRate: 0,
+    conversionRate: 0,
+    lastUpdated: new Date().toISOString()
+  }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const segmentMembers = pgTable("segment_members", {
+  id: serial("id").primaryKey(),
+  segmentId: integer("segment_id").references(() => segments.id).notNull(),
+  userId: text("user_id").notNull(),
+  attributes: jsonb("attributes").notNull(), // Store user attributes for faster filtering
+  addedAt: timestamp("added_at").notNull().defaultNow(),
+  lastEngaged: timestamp("last_engaged"),
+});
+
+export const segmentAnalytics = pgTable("segment_analytics", {
+  id: serial("id").primaryKey(),
+  segmentId: integer("segment_id").references(() => segments.id).notNull(),
+  date: timestamp("date").notNull(),
+  metrics: jsonb("metrics").$type<{
+    memberCount: number;
+    engagementRate: number;
+    conversionRate: number;
+    campaignPerformance: {
+      sent: number;
+      opened: number;
+      clicked: number;
+    };
+  }>().notNull(),
+});
+
 // Schema validations
 const flowSchema = z.object({
   nodes: z.array(z.object({
@@ -169,6 +224,27 @@ export const insertEmailTemplateSchema = createInsertSchema(emailTemplates)
   })
   .omit({ id: true, createdAt: true, updatedAt: true });
 
+// Add insert schemas for new tables
+export const insertSegmentSchema = createInsertSchema(segments, {
+  type: z.enum(["manual", "ai"]),
+  conditions: z.array(z.object({
+    field: z.string(),
+    operator: z.string(),
+    value: z.any(),
+    type: z.string().optional(),
+    timeframe: z.string().optional()
+  })),
+  aiPrompt: z.string().optional(),
+  isActive: z.boolean().default(true)
+}).omit({ id: true, createdAt: true, updatedAt: true });
+
+export const insertSegmentMemberSchema = createInsertSchema(segmentMembers)
+  .omit({ id: true, addedAt: true, lastEngaged: true });
+
+export const insertSegmentAnalyticsSchema = createInsertSchema(segmentAnalytics)
+  .omit({ id: true });
+
+
 // Export types
 export type Journey = typeof journeys.$inferSelect;
 export type InsertJourney = z.infer<typeof insertJourneySchema>;
@@ -182,3 +258,10 @@ export type JourneyVariant = typeof journeyVariants.$inferSelect;
 export type InsertJourneyVariant = z.infer<typeof insertJourneyVariantSchema>;
 export type JourneyEvent = typeof journeyEvents.$inferSelect;
 export type InsertJourneyEvent = z.infer<typeof insertJourneyEventSchema>;
+// Export new types
+export type Segment = typeof segments.$inferSelect;
+export type InsertSegment = z.infer<typeof insertSegmentSchema>;
+export type SegmentMember = typeof segmentMembers.$inferSelect;
+export type InsertSegmentMember = z.infer<typeof insertSegmentMemberSchema>;
+export type SegmentAnalytics = typeof segmentAnalytics.$inferSelect;
+export type InsertSegmentAnalytics = z.infer<typeof insertSegmentAnalyticsSchema>;
