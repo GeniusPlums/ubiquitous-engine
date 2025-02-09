@@ -30,7 +30,7 @@ export class DatabaseStorage implements IStorage {
   async createJourney(journey: InsertJourney): Promise<Journey> {
     const [newJourney] = await db
       .insert(journeys)
-      .values({ ...journey, status: "draft" })
+      .values(journey)
       .returning();
     return newJourney;
   }
@@ -57,11 +57,7 @@ export class DatabaseStorage implements IStorage {
   async createCampaign(campaign: InsertCampaign): Promise<Campaign> {
     const [newCampaign] = await db
       .insert(campaigns)
-      .values({
-        ...campaign,
-        status: "draft",
-        metrics: { sent: 0, opened: 0, clicked: 0 }
-      })
+      .values(campaign)
       .returning();
     return newCampaign;
   }

@@ -43,20 +43,25 @@ export const campaigns = pgTable("campaigns", {
     sent: number;
     opened: number;
     clicked: number;
-  }>().notNull().default({}),
+  }>().notNull().default({ sent: 0, opened: 0, clicked: 0 }),
   status: text("status").notNull().default("draft"),
 });
 
-export const insertJourneySchema = createInsertSchema(journeys).omit({ 
-  id: true,
-  status: true 
-});
+// Update insert schemas to include status field with default value
+export const insertJourneySchema = createInsertSchema(journeys, {
+  status: z.string().default("draft"),
+  description: z.string().optional(),
+}).omit({ id: true });
 
-export const insertCampaignSchema = createInsertSchema(campaigns).omit({ 
-  id: true,
-  status: true,
-  metrics: true 
-});
+export const insertCampaignSchema = createInsertSchema(campaigns, {
+  status: z.string().default("draft"),
+  metrics: z.object({
+    sent: z.number(),
+    opened: z.number(),
+    clicked: z.number()
+  }).default({ sent: 0, opened: 0, clicked: 0 }),
+  journeyId: z.number().optional()
+}).omit({ id: true });
 
 export type Journey = typeof journeys.$inferSelect;
 export type InsertJourney = z.infer<typeof insertJourneySchema>;
