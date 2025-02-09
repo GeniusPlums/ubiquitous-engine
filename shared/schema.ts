@@ -2,6 +2,7 @@ import { pgTable, text, serial, integer, jsonb, timestamp, boolean } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Existing tables remain unchanged
 export const journeys = pgTable("journeys", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -47,6 +48,17 @@ export const campaigns = pgTable("campaigns", {
   status: text("status").notNull().default("draft"),
 });
 
+// New email_templates table
+export const emailTemplates = pgTable("email_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  variables: jsonb("variables").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // Define flow schema explicitly for better validation
 const flowSchema = z.object({
   nodes: z.array(z.object({
@@ -84,7 +96,16 @@ export const insertCampaignSchema = createInsertSchema(campaigns, {
   journeyId: z.number().optional()
 }).omit({ id: true });
 
+// Email template insert schema
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates)
+  .extend({
+    variables: z.array(z.string()).default([])
+  })
+  .omit({ id: true, createdAt: true, updatedAt: true });
+
 export type Journey = typeof journeys.$inferSelect;
 export type InsertJourney = z.infer<typeof insertJourneySchema>;
 export type Campaign = typeof campaigns.$inferSelect;
 export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
