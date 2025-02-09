@@ -70,11 +70,11 @@ export default function Analytics() {
     return acc;
   }, []);
 
-  // Format variant data for comparison chart
+  // Format variant data for comparison chart with null checks
   const variantData = variants.map(variant => ({
     name: variant.name,
-    conversions: variant.metrics.conversions,
-    completionRate: variant.metrics.completionRate,
+    conversions: variant.metrics?.conversions ?? 0,
+    completionRate: variant.metrics?.completionRate ?? 0,
   }));
 
   return (
@@ -119,19 +119,19 @@ export default function Analytics() {
             <CardContent>
               <div className="grid grid-cols-2 gap-4">
                 <div className="text-center">
-                  <p className="text-2xl font-bold">{metrics?.totalUsers || 0}</p>
+                  <p className="text-2xl font-bold">{metrics?.totalUsers ?? 0}</p>
                   <p className="text-sm text-muted-foreground">Total Users</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold">{metrics?.completionRate || 0}%</p>
+                  <p className="text-2xl font-bold">{metrics?.completionRate ?? 0}%</p>
                   <p className="text-sm text-muted-foreground">Completion Rate</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold">{metrics?.averageDuration || 0}m</p>
+                  <p className="text-2xl font-bold">{metrics?.averageDuration ?? 0}m</p>
                   <p className="text-sm text-muted-foreground">Avg. Duration</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold">{metrics?.bounceRate || 0}%</p>
+                  <p className="text-2xl font-bold">{metrics?.bounceRate ?? 0}%</p>
                   <p className="text-sm text-muted-foreground">Bounce Rate</p>
                 </div>
               </div>
@@ -145,17 +145,23 @@ export default function Analytics() {
               <CardDescription>Variant performance comparison</CardDescription>
             </CardHeader>
             <CardContent className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={variantData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="conversions" fill="#0088FE" name="Conversions" />
-                  <Bar dataKey="completionRate" fill="#00C49F" name="Completion Rate (%)" />
-                </BarChart>
-              </ResponsiveContainer>
+              {variantData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={variantData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="conversions" fill="#0088FE" name="Conversions" />
+                    <Bar dataKey="completionRate" fill="#00C49F" name="Completion Rate (%)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-muted-foreground">No variant data available</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -166,16 +172,22 @@ export default function Analytics() {
               <CardDescription>User interaction events over time</CardDescription>
             </CardHeader>
             <CardContent className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={timelineData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="count" stroke="#8884d8" name="Events" />
-                </LineChart>
-              </ResponsiveContainer>
+              {timelineData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={timelineData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="count" stroke="#8884d8" name="Events" />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-muted-foreground">No event data available</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
