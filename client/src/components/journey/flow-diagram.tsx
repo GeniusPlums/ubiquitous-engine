@@ -31,7 +31,7 @@ const NodeTypes = {
   sms: ({ data }: any) => (
     <div className="min-w-[180px] p-4 rounded-lg bg-purple-500 text-white shadow-lg transition-transform hover:scale-105 cursor-grab active:cursor-grabbing">
       <div className="flex items-center gap-2">
-        <MessageSquare className="h-5 w-5" />
+        <MessageSquare className="h-5 w-4" />
         <span className="font-medium">{data.label}</span>
       </div>
     </div>
@@ -84,7 +84,11 @@ const defaultEdgeOptions = {
 };
 
 export function FlowDiagram({ flow, onFlowChange }: FlowDiagramProps) {
-  const [nodes, setNodes] = useState<Node[]>(flow.nodes);
+  const [nodes, setNodes] = useState<Node[]>(flow.nodes.map(node => ({ 
+    ...node, 
+    draggable: true,
+    connectable: true,
+  })));
   const [edges, setEdges] = useState<Edge[]>(flow.edges);
   const [zoom, setZoom] = useState(1);
 
@@ -135,6 +139,12 @@ export function FlowDiagram({ flow, onFlowChange }: FlowDiagramProps) {
         minZoom={0.1}
         maxZoom={4}
         onZoomChange={setZoom}
+        draggable={true}
+        panOnDrag={true}
+        selectable={true}
+        zoomOnScroll={true}
+        panOnScroll={false}
+        preventScrolling={true}
       >
         <Panel position="top-right" className="flex gap-2">
           <Button
