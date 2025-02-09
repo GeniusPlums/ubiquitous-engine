@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Brain, Filter, Download, Upload, RefreshCw } from "lucide-react";
+import { Brain, Filter, Download, Upload, RefreshCw, X } from "lucide-react";
 import type { Segment } from "@shared/schema";
 
 const conditionSchema = z.object({
@@ -36,6 +36,22 @@ const formSchema = z.object({
   conditions: z.array(conditionSchema).optional(),
   aiPrompt: z.string().optional(),
 });
+
+const AVAILABLE_FIELDS = [
+  { label: "Email", value: "email" },
+  { label: "Country", value: "country" },
+  { label: "Sign Up Date", value: "signUpDate" },
+  { label: "Last Activity", value: "lastActivity" },
+  { label: "Total Purchases", value: "totalPurchases" },
+];
+
+const OPERATORS = [
+  { label: "Equals", value: "equals" },
+  { label: "Contains", value: "contains" },
+  { label: "Greater Than", value: "gt" },
+  { label: "Less Than", value: "lt" },
+  { label: "Between", value: "between" },
+];
 
 export default function Segments() {
   const [activeTab, setActiveTab] = useState<"manual" | "ai">("manual");
@@ -79,6 +95,23 @@ export default function Segments() {
       });
     },
   });
+
+  const addCondition = () => {
+    const currentConditions = form.getValues("conditions") || [];
+    form.setValue("conditions", [
+      ...currentConditions,
+      {
+        field: "",
+        operator: "equals",
+        value: "",
+      },
+    ]);
+  };
+
+  const removeCondition = (index: number) => {
+    const currentConditions = form.getValues("conditions") || [];
+    form.setValue("conditions", currentConditions.filter((_, i) => i !== index));
+  };
 
   const handleExport = async (segmentId: number) => {
     const response = await fetch(`/api/segments/${segmentId}/export`);
@@ -188,16 +221,80 @@ export default function Segments() {
                   />
 
                   <TabsContent value="manual">
-                    {/* Manual condition builder will be implemented here */}
                     <div className="space-y-4">
-                      <Button type="button" variant="outline" onClick={() => {
-                        const conditions = form.getValues("conditions") || [];
-                        form.setValue("conditions", [...conditions, {
-                          field: "",
-                          operator: "equals",
-                          value: "",
-                        }]);
-                      }}>
+                      {form.watch("conditions")?.map((condition, index) => (
+                        <div key={index} className="flex gap-2 items-start">
+                          <FormField
+                            control={form.control}
+                            name={`conditions.${index}.field`}
+                            render={({ field }) => (
+                              <FormItem className="flex-1">
+                                <Select
+                                  value={field.value}
+                                  onValueChange={field.onChange}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select field" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {AVAILABLE_FIELDS.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name={`conditions.${index}.operator`}
+                            render={({ field }) => (
+                              <FormItem className="flex-1">
+                                <Select
+                                  value={field.value}
+                                  onValueChange={field.onChange}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select operator" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {OPERATORS.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name={`conditions.${index}.value`}
+                            render={({ field }) => (
+                              <FormItem className="flex-1">
+                                <FormControl>
+                                  <Input {...field} placeholder="Value" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeCondition(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button type="button" variant="outline" onClick={addCondition}>
                         Add Condition
                       </Button>
                     </div>
