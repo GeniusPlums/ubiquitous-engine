@@ -20,21 +20,29 @@ export function registerRoutes(app: Express): Server {
 
   app.post("/api/journeys", async (req, res) => {
     try {
-      const parsed = insertJourneySchema.safeParse(req.body);
+      // First validate the basic journey data without flow
+      const { prompt, ...journeyData } = req.body;
+      if (!prompt) {
+        return res.status(400).json({ message: "Prompt is required" });
+      }
+
+      // Generate flow from the prompt
+      const flow = await generateFlowFromPrompt(prompt);
+
+      // Now validate the complete journey data including the generated flow
+      const completeJourneyData = {
+        ...journeyData,
+        prompt,
+        flow
+      };
+
+      const parsed = insertJourneySchema.safeParse(completeJourneyData);
       if (!parsed.success) {
         const error = fromZodError(parsed.error);
         return res.status(400).json({ message: error.message });
       }
 
-      if (!process.env.OPENAI_API_KEY) {
-        return res.status(500).json({ message: "OpenAI API key not configured" });
-      }
-
-      const flow = await generateFlowFromPrompt(parsed.data.prompt);
-      const journey = await storage.createJourney({
-        ...parsed.data,
-        flow
-      });
+      const journey = await storage.createJourney(parsed.data);
       res.json(journey);
     } catch (error: any) {
       console.error("Journey creation error:", error);

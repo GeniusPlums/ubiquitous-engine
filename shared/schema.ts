@@ -47,10 +47,31 @@ export const campaigns = pgTable("campaigns", {
   status: text("status").notNull().default("draft"),
 });
 
-// Update insert schemas to include status field with default value
+// Define flow schema explicitly for better validation
+const flowSchema = z.object({
+  nodes: z.array(z.object({
+    id: z.string(),
+    type: z.string(),
+    position: z.object({
+      x: z.number(),
+      y: z.number()
+    }),
+    data: z.object({
+      label: z.string()
+    }).catchall(z.any())
+  })),
+  edges: z.array(z.object({
+    id: z.string(),
+    source: z.string(),
+    target: z.string()
+  }))
+});
+
+// Update insert schemas to include flow validation
 export const insertJourneySchema = createInsertSchema(journeys, {
   status: z.string().default("draft"),
   description: z.string().optional(),
+  flow: flowSchema
 }).omit({ id: true });
 
 export const insertCampaignSchema = createInsertSchema(campaigns, {
