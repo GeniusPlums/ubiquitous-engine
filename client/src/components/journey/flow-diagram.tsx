@@ -2,7 +2,8 @@ import ReactFlow, {
   Background, Controls, Edge, Node,
   NodeChange, EdgeChange, Connection,
   applyNodeChanges, applyEdgeChanges,
-  addEdge, MiniMap, Panel
+  addEdge, MiniMap, Panel, Handle,
+  Position
 } from "reactflow";
 import "reactflow/dist/style.css";
 import type { Flow, FlowNode } from "@/lib/types";
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 const NodeTypes = {
   trigger: ({ data }: any) => (
     <div className="min-w-[180px] p-4 rounded-lg bg-blue-500 text-white shadow-lg transition-transform hover:scale-105 cursor-grab active:cursor-grabbing">
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-blue-200" />
       <div className="flex items-center gap-2">
         <AlertCircle className="h-5 w-5" />
         <span className="font-medium">{data.label}</span>
@@ -22,46 +24,59 @@ const NodeTypes = {
   ),
   email: ({ data }: any) => (
     <div className="min-w-[180px] p-4 rounded-lg bg-green-500 text-white shadow-lg transition-transform hover:scale-105 cursor-grab active:cursor-grabbing">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-green-200" />
       <div className="flex items-center gap-2">
         <Mail className="h-5 w-5" />
         <span className="font-medium">{data.label}</span>
       </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-green-200" />
     </div>
   ),
   sms: ({ data }: any) => (
     <div className="min-w-[180px] p-4 rounded-lg bg-purple-500 text-white shadow-lg transition-transform hover:scale-105 cursor-grab active:cursor-grabbing">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-purple-200" />
       <div className="flex items-center gap-2">
         <MessageSquare className="h-5 w-4" />
         <span className="font-medium">{data.label}</span>
       </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-purple-200" />
     </div>
   ),
   push: ({ data }: any) => (
     <div className="min-w-[180px] p-4 rounded-lg bg-orange-500 text-white shadow-lg transition-transform hover:scale-105 cursor-grab active:cursor-grabbing">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-orange-200" />
       <div className="flex items-center gap-2">
         <Bell className="h-5 w-5" />
         <span className="font-medium">{data.label}</span>
       </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-orange-200" />
     </div>
   ),
   condition: ({ data }: any) => (
     <div className="min-w-[180px] p-4 rounded-lg bg-yellow-500 text-white shadow-lg transition-transform hover:scale-105 cursor-grab active:cursor-grabbing">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-yellow-200" />
       <div className="flex items-center gap-2">
         <AlertCircle className="h-5 w-5" />
         <span className="font-medium">{data.label}</span>
       </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-yellow-200" />
+      <Handle type="source" position={Position.Right} className="w-3 h-3 bg-yellow-200" id="yes" />
+      <Handle type="source" position={Position.Left} className="w-3 h-3 bg-yellow-200" id="no" />
     </div>
   ),
   delay: ({ data }: any) => (
     <div className="min-w-[180px] p-4 rounded-lg bg-indigo-500 text-white shadow-lg transition-transform hover:scale-105 cursor-grab active:cursor-grabbing">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-indigo-200" />
       <div className="flex items-center gap-2">
         <Clock className="h-5 w-5" />
         <span className="font-medium">{data.label}</span>
       </div>
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 bg-indigo-200" />
     </div>
   ),
   end: ({ data }: any) => (
     <div className="min-w-[180px] p-4 rounded-lg bg-red-500 text-white shadow-lg transition-transform hover:scale-105 cursor-grab active:cursor-grabbing">
+      <Handle type="target" position={Position.Top} className="w-3 h-3 bg-red-200" />
       <div className="flex items-center gap-2">
         <Check className="h-5 w-5" />
         <span className="font-medium">{data.label}</span>
@@ -134,7 +149,21 @@ export function FlowDiagram({ flow, onFlowChange }: FlowDiagramProps) {
   // Handle new connections between nodes
   const onConnect = useCallback(
     (connection: Connection) => {
-      const updatedEdges = addEdge(connection, edges);
+      // Validate connection
+      if (!connection.source || !connection.target) return;
+
+      const sourceNode = nodes.find(n => n.id === connection.source);
+      const targetNode = nodes.find(n => n.id === connection.target);
+
+      // Don't allow connections to trigger nodes or from end nodes
+      if (targetNode?.type === 'trigger' || sourceNode?.type === 'end') return;
+
+      const updatedEdges = addEdge({
+        ...connection,
+        type: 'smoothstep',
+        animated: true,
+      }, edges);
+
       setEdges(updatedEdges);
       onFlowChange?.({ 
         nodes, 
