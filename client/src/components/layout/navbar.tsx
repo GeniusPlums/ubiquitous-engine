@@ -28,6 +28,11 @@ export function Navbar() {
                 <Button variant="ghost">Campaigns</Button>
               </Link>
             </NavigationMenuItem>
+            <NavigationMenuItem>
+              <Link href="/templates">
+                <Button variant="ghost">Email Templates</Button>
+              </Link>
+            </NavigationMenuItem>
           </NavigationMenuList>
         </NavigationMenu>
       </div>

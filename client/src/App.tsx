@@ -6,6 +6,7 @@ import { Navbar } from "@/components/layout/navbar";
 import Dashboard from "@/pages/dashboard";
 import Builder from "@/pages/builder";
 import Campaigns from "@/pages/campaigns";
+import Templates from "@/pages/templates";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -15,6 +16,7 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/builder" component={Builder} />
       <Route path="/campaigns" component={Campaigns} />
+      <Route path="/templates" component={Templates} />
       <Route component={NotFound} />
     </Switch>
   );
