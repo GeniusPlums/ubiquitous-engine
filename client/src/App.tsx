@@ -8,6 +8,7 @@ import Builder from "@/pages/builder";
 import Campaigns from "@/pages/campaigns";
 import Templates from "@/pages/templates";
 import Analytics from "@/pages/analytics";
+import Segments from "@/pages/segments";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/campaigns" component={Campaigns} />
       <Route path="/templates" component={Templates} />
       <Route path="/analytics" component={Analytics} />
+      <Route path="/segments" component={Segments} />
       <Route component={NotFound} />
     </Switch>
   );

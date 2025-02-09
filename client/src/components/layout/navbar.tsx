@@ -29,6 +29,11 @@ export function Navbar() {
               </Link>
             </NavigationMenuItem>
             <NavigationMenuItem>
+              <Link href="/segments">
+                <Button variant="ghost">Segments</Button>
+              </Link>
+            </NavigationMenuItem>
+            <NavigationMenuItem>
               <Link href="/templates">
                 <Button variant="ghost">Email Templates</Button>
               </Link>
