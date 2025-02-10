@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -54,6 +54,8 @@ export function EmailEditor({ onChange, onSave, initialAIMode = false }: EmailEd
   const [imageUrl, setImageUrl] = useState("");
   const [buttonText, setButtonText] = useState("");
   const [buttonUrl, setButtonUrl] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const editor = useEditor({
@@ -96,6 +98,19 @@ export function EmailEditor({ onChange, onSave, initialAIMode = false }: EmailEd
     if (editor && imageUrl) {
       editor.commands.setImage({ src: imageUrl });
       setImageUrl("");
+      setSelectedFile(null);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -199,7 +214,7 @@ export function EmailEditor({ onChange, onSave, initialAIMode = false }: EmailEd
                 className="flex-1"
                 autoFocus
               />
-              <Button 
+              <Button
                 onClick={generateFromPrompt}
                 disabled={isGenerating}
                 className="self-start"
@@ -244,13 +259,33 @@ export function EmailEditor({ onChange, onSave, initialAIMode = false }: EmailEd
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                       <div className="space-y-2">
-                        <Label>Image URL</Label>
+                        <Label>Image Upload</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileUpload}
+                            ref={fileInputRef}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Or Image URL</Label>
                         <Input
                           value={imageUrl}
                           onChange={(e) => setImageUrl(e.target.value)}
                           placeholder="Enter image URL"
                         />
                       </div>
+                      {(imageUrl || selectedFile) && (
+                        <div className="mt-2">
+                          <img
+                            src={imageUrl}
+                            alt="Preview"
+                            className="max-w-full h-auto max-h-[200px] object-contain"
+                          />
+                        </div>
+                      )}
                       <Button onClick={insertImage}>Insert Image</Button>
                     </div>
                   </DialogContent>
@@ -309,7 +344,7 @@ export function EmailEditor({ onChange, onSave, initialAIMode = false }: EmailEd
         {isPreview && (
           <div className="space-y-2">
             <Label>Preview</Label>
-            <div 
+            <div
               className="min-h-[200px] border rounded-md p-4 prose"
               dangerouslySetInnerHTML={{ __html: previewContent() || "" }}
             />
