@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import Image from "@tiptap/extension-image";
+import Link from "@tiptap/extension-link";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,8 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, ImageIcon, Link2Icon } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 interface EmailTemplate {
@@ -42,6 +51,9 @@ export function EmailEditor({ onChange, onSave, initialAIMode = false }: EmailEd
   const [isPreview, setIsPreview] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
+  const [buttonText, setButtonText] = useState("");
+  const [buttonUrl, setButtonUrl] = useState("");
   const { toast } = useToast();
 
   const editor = useEditor({
@@ -49,6 +61,10 @@ export function EmailEditor({ onChange, onSave, initialAIMode = false }: EmailEd
       StarterKit,
       Placeholder.configure({
         placeholder: "Enter email content...",
+      }),
+      Image,
+      Link.configure({
+        openOnClick: false,
       }),
     ],
     editorProps: {
@@ -73,6 +89,22 @@ export function EmailEditor({ onChange, onSave, initialAIMode = false }: EmailEd
   const insertVariable = (variable: string) => {
     if (editor) {
       editor.commands.insertContent(variable);
+    }
+  };
+
+  const insertImage = () => {
+    if (editor && imageUrl) {
+      editor.commands.setImage({ src: imageUrl });
+      setImageUrl("");
+    }
+  };
+
+  const insertButton = () => {
+    if (editor && buttonText && buttonUrl) {
+      const buttonHtml = `<a href="${buttonUrl}" class="inline-block px-6 py-2 bg-primary text-white rounded-md no-underline hover:bg-primary/90">${buttonText}</a>`;
+      editor.commands.insertContent(buttonHtml);
+      setButtonText("");
+      setButtonUrl("");
     }
   };
 
@@ -155,7 +187,6 @@ export function EmailEditor({ onChange, onSave, initialAIMode = false }: EmailEd
         <CardTitle>Email Template</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Show prompt-based generation only in AI mode */}
         {initialAIMode && (
           <div className="space-y-2">
             <Label htmlFor="prompt">Generate from Prompt</Label>
@@ -200,18 +231,76 @@ export function EmailEditor({ onChange, onSave, initialAIMode = false }: EmailEd
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label>Content</Label>
-              <Select onValueChange={insertVariable}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Insert variable" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableVariables.map((variable) => (
-                    <SelectItem key={variable} value={variable}>
-                      {variable}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2 items-center">
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="icon">
+                      <ImageIcon className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Insert Image</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label>Image URL</Label>
+                        <Input
+                          value={imageUrl}
+                          onChange={(e) => setImageUrl(e.target.value)}
+                          placeholder="Enter image URL"
+                        />
+                      </div>
+                      <Button onClick={insertImage}>Insert Image</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="icon">
+                      <Link2Icon className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Insert Button</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label>Button Text</Label>
+                        <Input
+                          value={buttonText}
+                          onChange={(e) => setButtonText(e.target.value)}
+                          placeholder="Enter button text"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Button URL</Label>
+                        <Input
+                          value={buttonUrl}
+                          onChange={(e) => setButtonUrl(e.target.value)}
+                          placeholder="Enter button URL"
+                        />
+                      </div>
+                      <Button onClick={insertButton}>Insert Button</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <Select onValueChange={insertVariable}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Insert variable" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableVariables.map((variable) => (
+                      <SelectItem key={variable} value={variable}>
+                        {variable}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <EditorContent editor={editor} className="min-h-[200px] border rounded-md p-4" />
           </div>
