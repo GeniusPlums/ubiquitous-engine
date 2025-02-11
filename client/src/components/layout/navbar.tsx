@@ -19,13 +19,13 @@ export function Navbar() {
               </Link>
             </NavigationMenuItem>
             <NavigationMenuItem>
-              <Link href="/builder">
-                <Button variant="ghost">Journey Builder</Button>
+              <Link href="/campaigns">
+                <Button variant="ghost">Campaigns</Button>
               </Link>
             </NavigationMenuItem>
             <NavigationMenuItem>
-              <Link href="/campaigns">
-                <Button variant="ghost">Campaigns</Button>
+              <Link href="/builder">
+                <Button variant="ghost">Journey Builder</Button>
               </Link>
             </NavigationMenuItem>
             <NavigationMenuItem>
