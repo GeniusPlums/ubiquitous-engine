@@ -1,8 +1,8 @@
-import { pgTable, text, serial, integer, jsonb, timestamp, boolean, array } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, jsonb, timestamp, boolean, PgArray } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Existing tables remain unchanged
+// Existing tables remain unchanged until campaigns table
 export const journeys = pgTable("journeys", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -77,6 +77,8 @@ export const campaigns = pgTable("campaigns", {
   id: serial("id").primaryKey(),
   journeyId: integer("journey_id").references(() => journeys.id),
   name: text("name").notNull(),
+  templateId: integer("template_id").references(() => emailTemplates.id),
+  active: boolean("active").notNull().default(true),
   template: jsonb("template").$type<{
     subject: string;
     body: string;
@@ -215,7 +217,9 @@ export const insertCampaignSchema = createInsertSchema(campaigns, {
     opened: z.number(),
     clicked: z.number()
   }).default({ sent: 0, opened: 0, clicked: 0 }),
-  journeyId: z.number().optional()
+  journeyId: z.number().optional(),
+  active: z.boolean().default(true),
+  templateId: z.number()
 }).omit({ id: true });
 
 export const insertEmailTemplateSchema = createInsertSchema(emailTemplates)
@@ -265,3 +269,5 @@ export type SegmentMember = typeof segmentMembers.$inferSelect;
 export type InsertSegmentMember = z.infer<typeof insertSegmentMemberSchema>;
 export type SegmentAnalytics = typeof segmentAnalytics.$inferSelect;
 export type InsertSegmentAnalytics = z.infer<typeof insertSegmentAnalyticsSchema>;
+// Add Template type alias for EmailTemplate
+export type Template = EmailTemplate;
