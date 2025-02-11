@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PlayCircle, PauseCircle, Settings } from "lucide-react";
+import { PlayCircle, PauseCircle, Settings, Wand2 } from "lucide-react";
 import type { Campaign, Journey, Template, Segment } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/api";
@@ -21,7 +22,12 @@ const insertCampaignSchema = z.object({
   segmentId: z.string().min(1, { message: "Segment is required" }),
 });
 
+const aiPromptSchema = z.object({
+  prompt: z.string().min(10, { message: "Please provide a detailed prompt for the AI" }),
+});
+
 type InsertCampaign = z.infer<typeof insertCampaignSchema>;
+type AiPrompt = z.infer<typeof aiPromptSchema>;
 
 export default function Campaigns() {
   const { data: campaigns, isLoading: isLoadingCampaigns } = useQuery<Campaign[]>({
@@ -50,6 +56,13 @@ export default function Campaigns() {
     },
   });
 
+  const aiForm = useForm({
+    resolver: zodResolver(aiPromptSchema),
+    defaultValues: {
+      prompt: "",
+    },
+  });
+
   const createCampaign = useMutation({
     mutationFn: async (data: InsertCampaign) => {
       await apiRequest("/api/campaigns", {
@@ -59,6 +72,25 @@ export default function Campaigns() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
+    },
+  });
+
+  const generateAICampaign = useMutation({
+    mutationFn: async (data: AiPrompt) => {
+      const response = await apiRequest("/api/campaigns/generate", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return response;
+    },
+    onSuccess: (data) => {
+      // Pre-fill the manual form with AI-generated data
+      form.reset({
+        name: data.name,
+        journeyId: "",  // Journey needs to be selected manually
+        templateId: "",  // Template will be created from AI suggestion
+        segmentId: "",  // Segment will be created from AI suggestion
+      });
     },
   });
 
@@ -82,108 +114,148 @@ export default function Campaigns() {
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-4xl font-bold">Campaign Control Center</h1>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>Create Campaign</Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Create New Campaign</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit((data) => createCampaign.mutate(data))} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Campaign Name</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="journeyId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Journey</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+        <div className="flex gap-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex gap-2">
+                <Wand2 className="h-4 w-4" />
+                AI Assist
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Generate AI Campaign</DialogTitle>
+              </DialogHeader>
+              <Form {...aiForm}>
+                <form onSubmit={aiForm.handleSubmit((data) => generateAICampaign.mutate(data))} className="space-y-4">
+                  <FormField
+                    control={aiForm.control}
+                    name="prompt"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Campaign Idea</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select journey" />
-                          </SelectTrigger>
+                          <Textarea
+                            placeholder="Describe your campaign idea in detail. For example: Create a re-engagement campaign for users who haven't logged in for 30 days, focusing on new feature announcements."
+                            className="h-32"
+                            {...field}
+                          />
                         </FormControl>
-                        <SelectContent>
-                          {journeys?.map((journey) => (
-                            <SelectItem key={journey.id} value={journey.id.toString()}>
-                              {journey.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="templateId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email Template</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" className="w-full" disabled={generateAICampaign.isPending}>
+                    Generate Campaign
+                  </Button>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button>Create Campaign</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Create New Campaign</DialogTitle>
+              </DialogHeader>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit((data) => createCampaign.mutate(data))} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Campaign Name</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select template" />
-                          </SelectTrigger>
+                          <Input {...field} />
                         </FormControl>
-                        <SelectContent>
-                          {templates?.map((template) => (
-                            <SelectItem key={template.id} value={template.id.toString()}>
-                              {template.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="segmentId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Audience Segment</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select segment" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {segments?.map((segment) => (
-                            <SelectItem key={segment.id} value={segment.id.toString()}>
-                              {segment.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" disabled={createCampaign.isPending}>
-                  Create Campaign
-                </Button>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="journeyId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Journey</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select journey" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {journeys?.map((journey) => (
+                              <SelectItem key={journey.id} value={journey.id.toString()}>
+                                {journey.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="templateId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email Template</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select template" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {templates?.map((template) => (
+                              <SelectItem key={template.id} value={template.id.toString()}>
+                                {template.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="segmentId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Audience Segment</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select segment" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {segments?.map((segment) => (
+                              <SelectItem key={segment.id} value={segment.id.toString()}>
+                                {segment.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" className="w-full" disabled={createCampaign.isPending}>
+                    Create Campaign
+                  </Button>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-4">

@@ -4,6 +4,7 @@ import { z } from "zod";
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// Existing interfaces and flow schema remain unchanged
 export interface FlowNode {
   id: string;
   type: string;
@@ -41,6 +42,75 @@ const flowSchema = z.object({
   }))
 });
 
+// New campaign generation types
+export interface CampaignSuggestion {
+  name: string;
+  description: string;
+  subject: string;
+  emailBody: string;
+  segmentSuggestion: {
+    name: string;
+    conditions: Array<{
+      field: string;
+      operator: string;
+      value: string;
+    }>;
+  };
+}
+
+export async function generateCampaignSuggestion(
+  prompt: string,
+  existingSegments?: Array<{ name: string; conditions: any[] }>
+): Promise<CampaignSuggestion> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("Missing OPENAI_API_KEY");
+  }
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert marketing campaign assistant. Given a campaign idea, generate a complete campaign suggestion including email content and audience targeting.
+          ${existingSegments ? `Consider these existing segments: ${JSON.stringify(existingSegments)}` : ''}`
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      response_format: { type: "json_object" }
+    });
+
+    const content = response.choices[0].message.content;
+    if (!content) {
+      throw new Error("No content in OpenAI response");
+    }
+
+    const campaignSchema = z.object({
+      name: z.string(),
+      description: z.string(),
+      subject: z.string(),
+      emailBody: z.string(),
+      segmentSuggestion: z.object({
+        name: z.string(),
+        conditions: z.array(z.object({
+          field: z.string(),
+          operator: z.string(),
+          value: z.string()
+        }))
+      })
+    });
+
+    return campaignSchema.parse(JSON.parse(content));
+  } catch (error) {
+    console.error("Error generating campaign suggestion:", error);
+    throw new Error("Failed to generate campaign suggestion: " + (error as Error).message);
+  }
+}
+
+// Keep existing generateFlowFromPrompt function
 export async function generateFlowFromPrompt(prompt: string): Promise<Flow> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("Missing OPENAI_API_KEY");

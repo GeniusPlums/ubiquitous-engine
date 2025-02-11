@@ -2,12 +2,13 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { generateFlowFromPrompt } from "./openai";
-import { 
+import {
   insertJourneySchema, insertCampaignSchema, insertEmailTemplateSchema,
-  insertJourneyMetricsSchema, insertJourneyVariantSchema, insertJourneyEventSchema 
+  insertJourneyMetricsSchema, insertJourneyVariantSchema, insertJourneyEventSchema
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import OpenAI from "openai";
+import { generateCampaignSuggestion } from "./openai";
 
 // Initialize OpenAI
 let openai: OpenAI | null = null;
@@ -185,6 +186,45 @@ export function registerRoutes(app: Express): Server {
     } catch (error: any) {
       console.error("Campaign creation error:", error);
       res.status(500).json({ message: error.message || "Failed to create campaign" });
+    }
+  });
+
+  app.post("/api/campaigns/generate", async (req, res) => {
+    try {
+      const { prompt } = req.body;
+      if (!prompt) {
+        return res.status(400).json({ message: "Prompt is required" });
+      }
+
+      // Get existing segments for context
+      const segments = await storage.getSegments();
+      const suggestion = await generateCampaignSuggestion(prompt, segments);
+
+      // Create a new email template from the AI suggestion
+      const emailTemplate = await storage.createEmailTemplate({
+        name: `${suggestion.name} Template`,
+        subject: suggestion.subject,
+        body: suggestion.emailBody,
+        type: "email",
+        variables: []
+      });
+
+      // Create a new segment from the AI suggestion
+      const segment = await storage.createSegment({
+        name: suggestion.segmentSuggestion.name,
+        description: `AI-generated segment for ${suggestion.name}`,
+        conditions: suggestion.segmentSuggestion.conditions,
+        type: "ai"
+      });
+
+      res.json({
+        ...suggestion,
+        templateId: emailTemplate.id,
+        segmentId: segment.id
+      });
+    } catch (error: any) {
+      console.error("Campaign generation error:", error);
+      res.status(500).json({ message: error.message || "Failed to generate campaign" });
     }
   });
 
