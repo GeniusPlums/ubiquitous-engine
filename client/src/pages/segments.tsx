@@ -23,23 +23,23 @@ import type { Segment } from "@shared/schema";
 
 // Updated column definitions
 const CSV_COLUMNS = [
-  "Name", "Email", "Financial Status", "Paid at", "Fulfillment Status", "Fulfilled at", 
-  "Accepts Marketing", "Currency", "Subtotal", "Shipping", "Taxes", "Total", 
-  "Discount Code", "Discount Amount", "Shipping Method", "Created at", 
-  "Lineitem quantity", "Lineitem name", "Lineitem price", "Lineitem compare at price", 
-  "Lineitem sku", "Lineitem requires shipping", "Lineitem taxable", 
-  "Lineitem fulfillment status", "Billing Name", "Billing Street", "Billing Address1", 
-  "Billing Address2", "Billing Company", "Billing City", "Billing Zip", 
-  "Billing Province", "Billing Country", "Billing Phone", "Shipping Name", 
-  "Shipping Street", "Shipping Address1", "Shipping Address2", "Shipping Company", 
-  "Shipping City", "Shipping Zip", "Shipping Province", "Shipping Country", 
-  "Shipping Phone", "Notes", "Note Attributes", "Cancelled at", "Payment Method", 
-  "Payment Reference", "Refunded Amount", "Vendor", "Outstanding Balance", 
-  "Employee", "Location", "Device ID", "Id", "Tags", "Risk Level", "Source", 
-  "Lineitem discount", "Tax 1 Name", "Tax 1 Value", "Tax 2 Name", "Tax 2 Value", 
-  "Tax 3 Name", "Tax 3 Value", "Tax 4 Name", "Tax 4 Value", "Tax 5 Name", 
-  "Tax 5 Value", "Phone", "Receipt Number", "Duties", "Billing Province Name", 
-  "Shipping Province Name", "Payment ID", "Payment Terms Name", "Next Payment Due At", 
+  "Name", "Email", "Financial Status", "Paid at", "Fulfillment Status", "Fulfilled at",
+  "Accepts Marketing", "Currency", "Subtotal", "Shipping", "Taxes", "Total",
+  "Discount Code", "Discount Amount", "Shipping Method", "Created at",
+  "Lineitem quantity", "Lineitem name", "Lineitem price", "Lineitem compare at price",
+  "Lineitem sku", "Lineitem requires shipping", "Lineitem taxable",
+  "Lineitem fulfillment status", "Billing Name", "Billing Street", "Billing Address1",
+  "Billing Address2", "Billing Company", "Billing City", "Billing Zip",
+  "Billing Province", "Billing Country", "Billing Phone", "Shipping Name",
+  "Shipping Street", "Shipping Address1", "Shipping Address2", "Shipping Company",
+  "Shipping City", "Shipping Zip", "Shipping Province", "Shipping Country",
+  "Shipping Phone", "Notes", "Note Attributes", "Cancelled at", "Payment Method",
+  "Payment Reference", "Refunded Amount", "Vendor", "Outstanding Balance",
+  "Employee", "Location", "Device ID", "Id", "Tags", "Risk Level", "Source",
+  "Lineitem discount", "Tax 1 Name", "Tax 1 Value", "Tax 2 Name", "Tax 2 Value",
+  "Tax 3 Name", "Tax 3 Value", "Tax 4 Name", "Tax 4 Value", "Tax 5 Name",
+  "Tax 5 Value", "Phone", "Receipt Number", "Duties", "Billing Province Name",
+  "Shipping Province Name", "Payment ID", "Payment Terms Name", "Next Payment Due At",
   "Payment References"
 ];
 
@@ -272,7 +272,7 @@ export default function Segments() {
 
       // Check if required columns exist
       const requiredColumns = ["Name", "Email"];
-      const missingColumns = requiredColumns.filter(col => 
+      const missingColumns = requiredColumns.filter(col =>
         !headers.some(header => header === col)
       );
 
@@ -296,10 +296,11 @@ export default function Segments() {
         });
 
         if (response.ok) {
+          const result = await response.json();
           queryClient.invalidateQueries({ queryKey: ["/api/segments"] });
           toast({
-            title: "Success",
-            description: "Customer data imported successfully",
+            title: "Import Successful",
+            description: `Successfully imported ${result.importedCount} customer records. ${result.skippedCount ? `\nSkipped ${result.skippedCount} records due to validation errors.` : ''}`,
           });
           // Reset file input
           event.target.value = '';
@@ -309,8 +310,10 @@ export default function Segments() {
         }
       } catch (error) {
         toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : "Failed to import customer data",
+          title: "Import Failed",
+          description: error instanceof Error
+            ? `Failed to import data: ${error.message}`
+            : "Failed to import customer data. Please check the file format and try again.",
           variant: "destructive",
         });
       }
