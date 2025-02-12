@@ -1,14 +1,16 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { generateFlowFromPrompt } from "./openai";
+import multer from "multer";
+import { parse } from "csv-parse";
 import {
   insertJourneySchema, insertCampaignSchema, insertEmailTemplateSchema,
-  insertJourneyMetricsSchema, insertJourneyVariantSchema, insertJourneyEventSchema
+  insertJourneyMetricsSchema, insertJourneyVariantSchema, insertJourneyEventSchema,
+  insertCustomerSchema, insertOrderSchema, insertOrderItemSchema
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import OpenAI from "openai";
-import { generateCampaignSuggestion } from "./openai";
+import { generateFlowFromPrompt, generateCampaignSuggestion } from "./openai";
 
 // Initialize OpenAI
 let openai: OpenAI | null = null;
@@ -17,6 +19,9 @@ if (process.env.OPENAI_API_KEY) {
     apiKey: process.env.OPENAI_API_KEY
   });
 }
+
+// Configure multer for file upload
+const upload = multer({ storage: multer.memoryStorage() });
 
 export function registerRoutes(app: Express): Server {
   // Journeys
@@ -320,6 +325,121 @@ export function registerRoutes(app: Express): Server {
     } catch (error: any) {
       console.error("Template generation error:", error);
       res.status(500).json({ message: error.message || "Failed to generate template" });
+    }
+  });
+
+  // New route for CSV import
+  app.post("/api/segments/import", upload.single("file"), async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    try {
+      const fileContent = req.file.buffer.toString();
+      const records: any[] = [];
+
+      // Parse CSV
+      const parser = parse(fileContent, {
+        columns: true,
+        skip_empty_lines: true
+      });
+
+      for await (const record of parser) {
+        records.push(record);
+      }
+
+      // Process records and insert into database
+      for (const record of records) {
+        // Create customer record
+        const customerData = {
+          name: record.customer_name || "",
+          email: record.email || "",
+          phone: record.phone || "",
+          acceptsMarketing: record.accepts_marketing === "true",
+          billingName: record.billing_name || "",
+          billingStreet: record.billing_street || "",
+          billingCity: record.billing_city || "",
+          billingZip: record.billing_zip || "",
+          billingProvince: record.billing_province || "",
+          billingCountry: record.billing_country || "",
+          billingPhone: record.billing_phone || "",
+          shippingName: record.shipping_name || "",
+          shippingStreet: record.shipping_street || "",
+          shippingCity: record.shipping_city || "",
+          shippingZip: record.shipping_zip || "",
+          shippingProvince: record.shipping_province || "",
+          shippingCountry: record.shipping_country || "",
+          shippingPhone: record.shipping_phone || "",
+        };
+
+        const customer = await storage.createCustomer(customerData);
+
+        // Create order record if order details exist
+        if (record.order_id) {
+          const orderData = {
+            orderId: record.order_id,
+            customerId: customer.id,
+            financialStatus: record.financial_status || "pending",
+            paidAt: record.paid_at ? new Date(record.paid_at) : null,
+            fulfillmentStatus: record.fulfillment_status || "unfulfilled",
+            currency: record.currency || "USD",
+            total: parseFloat(record.total) || 0,
+            createdAt: record.created_at ? new Date(record.created_at) : new Date(),
+            paymentMethod: record.payment_method || "",
+            source: "csv_import"
+          };
+
+          const order = await storage.createOrder(orderData);
+
+          // Create order items if they exist
+          if (record.items) {
+            const items = JSON.parse(record.items);
+            for (const item of items) {
+              await storage.createOrderItem({
+                orderId: order.id,
+                quantity: item.quantity || 1,
+                name: item.name || "",
+                price: parseFloat(item.price) || 0,
+                sku: item.sku || "",
+              });
+            }
+          }
+        }
+      }
+
+      res.json({ message: "Import completed successfully", recordsProcessed: records.length });
+    } catch (error: any) {
+      console.error("Import error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Add export route
+  app.get("/api/segments/:id/export", async (req, res) => {
+    try {
+      const segmentId = parseInt(req.params.id);
+      const members = await storage.getSegmentMembers(segmentId);
+
+      if (!members || members.length === 0) {
+        return res.status(404).json({ message: "No members found in this segment" });
+      }
+
+      // Generate CSV content
+      const headers = Object.keys(members[0].attributes).join(",");
+      const rows = members.map(member => 
+        Object.values(member.attributes).map(value => 
+          typeof value === "string" ? `"${value}"` : value
+        ).join(",")
+      );
+
+      const csvContent = [headers, ...rows].join("\n");
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename=segment-${segmentId}-export.csv`);
+      res.send(csvContent);
+    } catch (error: any) {
+      console.error("Export error:", error);
+      res.status(500).json({ message: error.message });
     }
   });
 

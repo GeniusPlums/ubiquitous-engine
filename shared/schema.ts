@@ -1,8 +1,80 @@
-import { pgTable, text, serial, integer, jsonb, timestamp, boolean, PgArray } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, jsonb, timestamp, boolean, PgArray, numeric, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Existing tables remain unchanged until campaigns table
+// Existing tables remain unchanged until segments table
+export const customers = pgTable("customers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  acceptsMarketing: boolean("accepts_marketing").default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  // Billing info
+  billingName: text("billing_name"),
+  billingStreet: text("billing_street"),
+  billingAddress1: text("billing_address1"),
+  billingAddress2: text("billing_address2"),
+  billingCompany: text("billing_company"),
+  billingCity: text("billing_city"),
+  billingZip: text("billing_zip"),
+  billingProvince: text("billing_province"),
+  billingCountry: text("billing_country"),
+  billingPhone: text("billing_phone"),
+  // Shipping info
+  shippingName: text("shipping_name"),
+  shippingStreet: text("shipping_street"),
+  shippingAddress1: text("shipping_address1"),
+  shippingAddress2: text("shipping_address2"),
+  shippingCompany: text("shipping_company"),
+  shippingCity: text("shipping_city"),
+  shippingZip: text("shipping_zip"),
+  shippingProvince: text("shipping_province"),
+  shippingCountry: text("shipping_country"),
+  shippingPhone: text("shipping_phone"),
+});
+
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull().unique(), // e.g. "#1001"
+  customerId: integer("customer_id").references(() => customers.id),
+  financialStatus: text("financial_status"), // paid, voided, etc.
+  paidAt: timestamp("paid_at"),
+  fulfillmentStatus: text("fulfillment_status"),
+  fulfilledAt: timestamp("fulfilled_at"),
+  currency: text("currency"),
+  subtotal: numeric("subtotal"),
+  shipping: numeric("shipping"),
+  taxes: numeric("taxes"),
+  total: numeric("total"),
+  discountCode: text("discount_code"),
+  discountAmount: numeric("discount_amount"),
+  shippingMethod: text("shipping_method"),
+  createdAt: timestamp("created_at").notNull(),
+  paymentMethod: text("payment_method"),
+  paymentReference: text("payment_reference"),
+  refundedAmount: numeric("refunded_amount"),
+  outstandingBalance: numeric("outstanding_balance"),
+  notes: text("notes"),
+  tags: text("tags"),
+  riskLevel: text("risk_level"),
+  source: text("source"),
+});
+
+export const orderItems = pgTable("order_items", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").references(() => orders.id),
+  quantity: integer("quantity"),
+  name: text("name"),
+  price: numeric("price"),
+  compareAtPrice: numeric("compare_at_price"),
+  sku: text("sku"),
+  requiresShipping: boolean("requires_shipping"),
+  taxable: boolean("taxable"),
+  fulfillmentStatus: text("fulfillment_status"),
+  discount: numeric("discount"),
+});
+
 export const journeys = pgTable("journeys", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -248,6 +320,19 @@ export const insertSegmentMemberSchema = createInsertSchema(segmentMembers)
 export const insertSegmentAnalyticsSchema = createInsertSchema(segmentAnalytics)
   .omit({ id: true });
 
+export const insertCustomerSchema = createInsertSchema(customers).omit({
+  id: true,
+  createdAt: true
+});
+
+export const insertOrderSchema = createInsertSchema(orders).omit({
+  id: true
+});
+
+export const insertOrderItemSchema = createInsertSchema(orderItems).omit({
+  id: true
+});
+
 
 // Export types
 export type Journey = typeof journeys.$inferSelect;
@@ -271,3 +356,10 @@ export type SegmentAnalytics = typeof segmentAnalytics.$inferSelect;
 export type InsertSegmentAnalytics = z.infer<typeof insertSegmentAnalyticsSchema>;
 // Add Template type alias for EmailTemplate
 export type Template = EmailTemplate;
+
+export type Customer = typeof customers.$inferSelect;
+export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type Order = typeof orders.$inferSelect;
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type OrderItem = typeof orderItems.$inferSelect;
+export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
