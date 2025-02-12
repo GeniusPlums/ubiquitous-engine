@@ -378,7 +378,7 @@ export function registerRoutes(app: Express): Server {
             billingCity: record["Billing City"],
             billingZip: record["Billing Zip"],
             billingProvince: record["Billing Province"],
-            billingCountry: record["Billing Country"],
+            billingCountry: record["Billing Country"] || "Unknown",
             billingPhone: record["Billing Phone"],
             // Shipping info
             shippingName: record["Shipping Name"],
@@ -389,11 +389,16 @@ export function registerRoutes(app: Express): Server {
             shippingCity: record["Shipping City"],
             shippingZip: record["Shipping Zip"],
             shippingProvince: record["Shipping Province"],
-            shippingCountry: record["Shipping Country"],
+            shippingCountry: record["Shipping Country"] || "Unknown",
             shippingPhone: record["Shipping Phone"]
           };
 
-          currentCustomer = await storage.createCustomer(customerData);
+          try {
+            currentCustomer = await storage.createCustomer(customerData);
+          } catch (error) {
+            console.error("Error creating customer:", error);
+            throw new Error(`Failed to create customer: ${error.message}`);
+          }
 
           // Create order record
           const orderData = {
@@ -422,10 +427,15 @@ export function registerRoutes(app: Express): Server {
             source: record["Source"] || "csv_import"
           };
 
-          currentOrder = await storage.createOrder(orderData);
+          try {
+            currentOrder = await storage.createOrder(orderData);
+          } catch (error) {
+            console.error("Error creating order:", error);
+            throw new Error(`Failed to create order: ${error.message}`);
+          }
         }
 
-        // Always create order item for the current row
+        // Always create order item for the current row if it has a line item
         if (currentOrder && record["Lineitem name"]) {
           const orderItemData = {
             orderId: currentOrder.id,
@@ -436,11 +446,16 @@ export function registerRoutes(app: Express): Server {
             sku: record["Lineitem sku"],
             requiresShipping: record["Lineitem requires shipping"]?.toLowerCase() === "true",
             taxable: record["Lineitem taxable"]?.toLowerCase() === "true",
-            fulfillmentStatus: record["Lineitem fulfillment status"] || "pending",
+            fulfillmentStatus: record["Lineitem fulfillment status"],
             discount: parseFloat(record["Lineitem discount"] || "0")
           };
 
-          await storage.createOrderItem(orderItemData);
+          try {
+            await storage.createOrderItem(orderItemData);
+          } catch (error) {
+            console.error("Error creating order item:", error);
+            throw new Error(`Failed to create order item: ${error.message}`);
+          }
         }
       }
 
