@@ -337,11 +337,13 @@ export function registerRoutes(app: Express): Server {
     try {
       const fileContent = req.file.buffer.toString();
       const records: any[] = [];
+      const orderMap = new Map(); // To track orders and their items
 
       // Parse CSV
       const parser = parse(fileContent, {
         columns: true,
-        skip_empty_lines: true
+        skip_empty_lines: true,
+        trim: true
       });
 
       for await (const record of parser) {
@@ -349,65 +351,100 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Process records and insert into database
+      let currentOrderId = "";
+      let currentOrder = null;
+      let currentCustomer = null;
+
       for (const record of records) {
-        // Create customer record
-        const customerData = {
-          name: record.customer_name || "",
-          email: record.email || "",
-          phone: record.phone || "",
-          acceptsMarketing: record.accepts_marketing === "true",
-          billingName: record.billing_name || "",
-          billingStreet: record.billing_street || "",
-          billingCity: record.billing_city || "",
-          billingZip: record.billing_zip || "",
-          billingProvince: record.billing_province || "",
-          billingCountry: record.billing_country || "",
-          billingPhone: record.billing_phone || "",
-          shippingName: record.shipping_name || "",
-          shippingStreet: record.shipping_street || "",
-          shippingCity: record.shipping_city || "",
-          shippingZip: record.shipping_zip || "",
-          shippingProvince: record.shipping_province || "",
-          shippingCountry: record.shipping_country || "",
-          shippingPhone: record.shipping_phone || "",
-        };
+        if (record["Name"] === "") continue; // Skip empty rows
 
-        const customer = await storage.createCustomer(customerData);
+        // If this is a new order
+        if (record["Id"] !== currentOrderId) {
+          currentOrderId = record["Id"];
 
-        // Create order record if order details exist
-        if (record.order_id) {
-          const orderData = {
-            orderId: record.order_id,
-            customerId: customer.id,
-            financialStatus: record.financial_status || "pending",
-            paidAt: record.paid_at ? new Date(record.paid_at) : null,
-            fulfillmentStatus: record.fulfillment_status || "unfulfilled",
-            currency: record.currency || "USD",
-            total: parseFloat(record.total) || 0,
-            createdAt: record.created_at ? new Date(record.created_at) : new Date(),
-            paymentMethod: record.payment_method || "",
-            source: "csv_import"
+          // Create customer record
+          const customerData = {
+            name: record["Name"] || "",
+            email: record["Email"] || "",
+            phone: record["Phone"] || "",
+            acceptsMarketing: record["Accepts Marketing"]?.toLowerCase() === "yes",
+            billingName: record["Billing Name"] || "",
+            billingStreet: record["Billing Street"] || "",
+            billingAddress1: record["Billing Address1"] || "",
+            billingAddress2: record["Billing Address2"] || "",
+            billingCompany: record["Billing Company"] || "",
+            billingCity: record["Billing City"] || "",
+            billingZip: record["Billing Zip"] || "",
+            billingProvince: record["Billing Province"] || "",
+            billingCountry: record["Billing Country"] || "",
+            billingPhone: record["Billing Phone"] || "",
+            shippingName: record["Shipping Name"] || "",
+            shippingStreet: record["Shipping Street"] || "",
+            shippingAddress1: record["Shipping Address1"] || "",
+            shippingAddress2: record["Shipping Address2"] || "",
+            shippingCompany: record["Shipping Company"] || "",
+            shippingCity: record["Shipping City"] || "",
+            shippingZip: record["Shipping Zip"] || "",
+            shippingProvince: record["Shipping Province"] || "",
+            shippingCountry: record["Shipping Country"] || "",
+            shippingPhone: record["Shipping Phone"] || ""
           };
 
-          const order = await storage.createOrder(orderData);
+          currentCustomer = await storage.createCustomer(customerData);
 
-          // Create order items if they exist
-          if (record.items) {
-            const items = JSON.parse(record.items);
-            for (const item of items) {
-              await storage.createOrderItem({
-                orderId: order.id,
-                quantity: item.quantity || 1,
-                name: item.name || "",
-                price: parseFloat(item.price) || 0,
-                sku: item.sku || "",
-              });
-            }
-          }
+          // Create order record
+          const orderData = {
+            orderId: record["Id"],
+            customerId: currentCustomer.id,
+            financialStatus: record["Financial Status"] || "pending",
+            paidAt: record["Paid at"] ? new Date(record["Paid at"]) : null,
+            fulfillmentStatus: record["Fulfillment Status"] || "unfulfilled",
+            fulfilledAt: record["Fulfilled at"] ? new Date(record["Fulfilled at"]) : null,
+            currency: record["Currency"] || "USD",
+            subtotal: parseFloat(record["Subtotal"] || "0"),
+            shipping: parseFloat(record["Shipping"] || "0"),
+            taxes: parseFloat(record["Taxes"] || "0"),
+            total: parseFloat(record["Total"] || "0"),
+            discountCode: record["Discount Code"] || "",
+            discountAmount: parseFloat(record["Discount Amount"] || "0"),
+            shippingMethod: record["Shipping Method"] || "",
+            createdAt: record["Created at"] ? new Date(record["Created at"]) : new Date(),
+            paymentMethod: record["Payment Method"] || "",
+            paymentReference: record["Payment Reference"] || "",
+            refundedAmount: parseFloat(record["Refunded Amount"] || "0"),
+            outstandingBalance: parseFloat(record["Outstanding Balance"] || "0"),
+            notes: record["Notes"] || "",
+            tags: record["Tags"] || "",
+            riskLevel: record["Risk Level"] || "low",
+            source: record["Source"] || "csv_import"
+          };
+
+          currentOrder = await storage.createOrder(orderData);
+        }
+
+        // Always create order item for the current row
+        if (currentOrder && record["Lineitem name"]) {
+          const orderItemData = {
+            orderId: currentOrder.id,
+            quantity: parseInt(record["Lineitem quantity"] || "1"),
+            name: record["Lineitem name"] || "",
+            price: parseFloat(record["Lineitem price"] || "0"),
+            compareAtPrice: parseFloat(record["Lineitem compare at price"] || "0"),
+            sku: record["Lineitem sku"] || "",
+            requiresShipping: record["Lineitem requires shipping"]?.toLowerCase() === "true",
+            taxable: record["Lineitem taxable"]?.toLowerCase() === "true",
+            fulfillmentStatus: record["Lineitem fulfillment status"] || "pending",
+            discount: parseFloat(record["Lineitem discount"] || "0")
+          };
+
+          await storage.createOrderItem(orderItemData);
         }
       }
 
-      res.json({ message: "Import completed successfully", recordsProcessed: records.length });
+      res.json({ 
+        message: "Import completed successfully", 
+        recordsProcessed: records.length 
+      });
     } catch (error: any) {
       console.error("Import error:", error);
       res.status(500).json({ message: error.message });
