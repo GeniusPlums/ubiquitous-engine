@@ -328,7 +328,7 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // New route for CSV import
+  // CSV import route
   app.post("/api/segments/import", upload.single("file"), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
@@ -338,7 +338,7 @@ export function registerRoutes(app: Express): Server {
       const fileContent = req.file.buffer.toString();
       const records: any[] = [];
 
-      // Parse CSV with minimal configuration
+      // Basic CSV parsing without any column validation
       const parser = parse(fileContent, {
         columns: true,
         skipEmptyLines: true
@@ -348,94 +348,66 @@ export function registerRoutes(app: Express): Server {
         records.push(record);
       }
 
-      // Process records
-      let currentOrderId = "";
+      let processedRecords = 0;
+      let currentOrderId = null;
       let currentOrder = null;
 
       for (const record of records) {
-        // Skip empty rows
+        // Only process records with an Id
         if (!record["Id"]) continue;
 
         // If this is a new order
         if (record["Id"] !== currentOrderId) {
           currentOrderId = record["Id"];
+          processedRecords++;
 
-          // Create customer record with raw data
+          // Create customer without any column name assumptions
           const customer = await storage.createCustomer({
             name: record["Name"],
             email: record["Email"],
             phone: record["Phone"],
-            acceptsMarketing: record["Accepts Marketing"]?.toLowerCase() === "yes",
+            acceptsMarketing: record["Accepts Marketing"] === "yes",
             billingName: record["Billing Name"],
-            billingStreet: record["Billing Street"],
             billingAddress1: record["Billing Address1"],
-            billingAddress2: record["Billing Address2"],
-            billingCompany: record["Billing Company"],
             billingCity: record["Billing City"],
             billingZip: record["Billing Zip"],
-            billingProvince: record["Billing Province Name"] || record["Billing Province"],
-            billingCountry: record["Billing Country"],
+            billingProvince: record["Billing Province Name"],
             billingPhone: record["Billing Phone"],
             shippingName: record["Shipping Name"],
-            shippingStreet: record["Shipping Street"],
             shippingAddress1: record["Shipping Address1"],
-            shippingAddress2: record["Shipping Address2"],
-            shippingCompany: record["Shipping Company"],
             shippingCity: record["Shipping City"],
             shippingZip: record["Shipping Zip"],
-            shippingProvince: record["Shipping Province Name"] || record["Shipping Province"],
-            shippingCountry: record["Shipping Country"],
+            shippingProvince: record["Shipping Province Name"],
             shippingPhone: record["Shipping Phone"]
           });
 
-          // Create order with raw data
+          // Create order with the customer id
           currentOrder = await storage.createOrder({
             orderId: record["Id"],
             customerId: customer.id,
             financialStatus: record["Financial Status"],
             paidAt: record["Paid at"] ? new Date(record["Paid at"]) : null,
             fulfillmentStatus: record["Fulfillment Status"],
-            fulfilledAt: record["Fulfilled at"] ? new Date(record["Fulfilled at"]) : null,
             currency: record["Currency"],
-            subtotal: record["Subtotal"],
-            shipping: record["Shipping"],
-            taxes: record["Taxes"],
             total: record["Total"],
-            discountCode: record["Discount Code"],
-            discountAmount: record["Discount Amount"],
-            shippingMethod: record["Shipping Method"],
-            createdAt: new Date(record["Created at"]),
-            paymentMethod: record["Payment Method"],
-            paymentReference: record["Payment Reference"],
-            refundedAmount: record["Refunded Amount"],
-            outstandingBalance: record["Outstanding Balance"],
-            notes: record["Notes"],
-            tags: record["Tags"],
-            riskLevel: record["Risk Level"],
-            source: record["Source"]
+            createdAt: new Date(record["Created at"])
           });
         }
 
-        // Create order item if it exists
+        // Create order item if there is line item data
         if (currentOrder && record["Lineitem name"]) {
           await storage.createOrderItem({
             orderId: currentOrder.id,
             quantity: record["Lineitem quantity"],
             name: record["Lineitem name"],
-            price: record["Lineitem price"],
-            compareAtPrice: record["Lineitem compare at price"],
-            sku: record["Lineitem sku"],
-            requiresShipping: record["Lineitem requires shipping"],
-            taxable: record["Lineitem taxable"],
-            fulfillmentStatus: record["Lineitem fulfillment status"],
-            discount: record["Lineitem discount"]
+            price: record["Lineitem price"]
           });
         }
       }
 
       res.json({
         message: "Import completed successfully",
-        recordsProcessed: records.length
+        recordsProcessed: processedRecords
       });
     } catch (error: any) {
       console.error("Import error:", error);
