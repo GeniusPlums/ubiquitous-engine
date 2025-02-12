@@ -21,6 +21,28 @@ import { toast } from "@/hooks/use-toast";
 import { Brain, Filter, Download, Upload, RefreshCw, X, FileDown, Plus } from "lucide-react";
 import type { Segment } from "@shared/schema";
 
+// Updated column definitions
+const CSV_COLUMNS = [
+  "Name", "Email", "Financial Status", "Paid at", "Fulfillment Status", "Fulfilled at", 
+  "Accepts Marketing", "Currency", "Subtotal", "Shipping", "Taxes", "Total", 
+  "Discount Code", "Discount Amount", "Shipping Method", "Created at", 
+  "Lineitem quantity", "Lineitem name", "Lineitem price", "Lineitem compare at price", 
+  "Lineitem sku", "Lineitem requires shipping", "Lineitem taxable", 
+  "Lineitem fulfillment status", "Billing Name", "Billing Street", "Billing Address1", 
+  "Billing Address2", "Billing Company", "Billing City", "Billing Zip", 
+  "Billing Province", "Billing Country", "Billing Phone", "Shipping Name", 
+  "Shipping Street", "Shipping Address1", "Shipping Address2", "Shipping Company", 
+  "Shipping City", "Shipping Zip", "Shipping Province", "Shipping Country", 
+  "Shipping Phone", "Notes", "Note Attributes", "Cancelled at", "Payment Method", 
+  "Payment Reference", "Refunded Amount", "Vendor", "Outstanding Balance", 
+  "Employee", "Location", "Device ID", "Id", "Tags", "Risk Level", "Source", 
+  "Lineitem discount", "Tax 1 Name", "Tax 1 Value", "Tax 2 Name", "Tax 2 Value", 
+  "Tax 3 Name", "Tax 3 Value", "Tax 4 Name", "Tax 4 Value", "Tax 5 Name", 
+  "Tax 5 Value", "Phone", "Receipt Number", "Duties", "Billing Province Name", 
+  "Shipping Province Name", "Payment ID", "Payment Terms Name", "Next Payment Due At", 
+  "Payment References"
+];
+
 // Enhanced condition schema with type-specific validation
 const conditionSchema = z.object({
   field: z.string(),
@@ -194,11 +216,13 @@ export default function Segments() {
   };
 
   const downloadTemplate = () => {
-    const headers = ["email", "country", "signUpDate", "lastActivity", "totalPurchases"];
-    const sampleData = ["user@example.com", "US", "2024-01-01", "2024-02-09", "5"];
+    // Create a sample data row with empty values for all columns
+    const sampleData = CSV_COLUMNS.map(() => "");
+    sampleData[CSV_COLUMNS.indexOf("Name")] = "John Doe";
+    sampleData[CSV_COLUMNS.indexOf("Email")] = "john.doe@example.com";
 
     const csvContent = [
-      headers.join(","),
+      CSV_COLUMNS.join(","),
       sampleData.join(",")
     ].join("\n");
 
@@ -210,18 +234,7 @@ export default function Segments() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  };
-
-  const handleExport = async (segmentId: number) => {
-    const response = await fetch(`/api/segments/${segmentId}/export`);
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `segment-${segmentId}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -254,15 +267,19 @@ export default function Segments() {
       const text = e.target?.result as string;
       const lines = text.split('\n');
 
-      // Validate headers
-      const headers = lines[0].toLowerCase().trim().split(',');
-      const requiredHeaders = ['email', 'country'];
-      const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+      // Get and normalize headers
+      const headers = lines[0].split(',').map(header => header.trim());
 
-      if (missingHeaders.length > 0) {
+      // Check if required columns exist
+      const requiredColumns = ["Name", "Email"];
+      const missingColumns = requiredColumns.filter(col => 
+        !headers.some(header => header === col)
+      );
+
+      if (missingColumns.length > 0) {
         toast({
           title: "Invalid CSV Format",
-          description: `Missing required columns: ${missingHeaders.join(', ')}`,
+          description: `Missing required columns: ${missingColumns.join(', ')}`,
           variant: "destructive",
         });
         return;
@@ -282,7 +299,7 @@ export default function Segments() {
           queryClient.invalidateQueries({ queryKey: ["/api/segments"] });
           toast({
             title: "Success",
-            description: "Audience list imported successfully",
+            description: "Customer data imported successfully",
           });
           // Reset file input
           event.target.value = '';
@@ -293,7 +310,7 @@ export default function Segments() {
       } catch (error) {
         toast({
           title: "Error",
-          description: error instanceof Error ? error.message : "Failed to import audience list",
+          description: error instanceof Error ? error.message : "Failed to import customer data",
           variant: "destructive",
         });
       }
@@ -302,6 +319,7 @@ export default function Segments() {
     reader.readAsText(file);
   };
 
+  // Update the CSV import guidelines in the card
   return (
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
@@ -329,17 +347,19 @@ export default function Segments() {
         <CardHeader>
           <CardTitle>CSV Import Guidelines</CardTitle>
           <CardDescription>
-            Follow these guidelines to ensure successful import of your audience data:
+            Follow these guidelines to ensure successful import of your customer data:
           </CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="list-disc pl-6 space-y-2">
-            <li>Use the template file as a starting point</li>
-            <li>Required columns: email, country</li>
-            <li>Date format: YYYY-MM-DD (e.g., 2024-02-09)</li>
-            <li>Numbers should be plain digits (e.g., 5)</li>
-            <li>First row must contain column headers</li>
+            <li>Download and use the template file as a starting point</li>
+            <li>Required columns: Name, Email</li>
+            <li>Date format: YYYY-MM-DD HH:mm:ss (e.g., 2024-02-12 10:30:00)</li>
+            <li>Boolean values should be 'true' or 'false'</li>
+            <li>Numeric values should be plain digits (e.g., 99.99)</li>
+            <li>First row must contain the exact column headers as in the template</li>
             <li>UTF-8 encoding is required</li>
+            <li>Maximum file size: 5MB</li>
           </ul>
         </CardContent>
       </Card>
