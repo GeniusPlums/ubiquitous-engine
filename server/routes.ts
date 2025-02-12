@@ -337,13 +337,10 @@ export function registerRoutes(app: Express): Server {
     try {
       const fileContent = req.file.buffer.toString();
       const records: any[] = [];
-      const orderMap = new Map(); // To track orders and their items
 
-      // Parse CSV
+      // Parse CSV with minimal configuration
       const parser = parse(fileContent, {
         columns: true,
-        skip_empty_lines: true,
-        trim: true,
         skipEmptyLines: true
       });
 
@@ -351,25 +348,24 @@ export function registerRoutes(app: Express): Server {
         records.push(record);
       }
 
-      // Process records and insert into database
+      // Process records
       let currentOrderId = "";
       let currentOrder = null;
-      let currentCustomer = null;
 
       for (const record of records) {
-        if (record["Name"] === "") continue; // Skip empty rows
+        // Skip empty rows
+        if (!record["Id"]) continue;
 
         // If this is a new order
         if (record["Id"] !== currentOrderId) {
           currentOrderId = record["Id"];
 
-          // Create customer record
-          const customerData = {
+          // Create customer record with raw data
+          const customer = await storage.createCustomer({
             name: record["Name"],
             email: record["Email"],
             phone: record["Phone"],
             acceptsMarketing: record["Accepts Marketing"]?.toLowerCase() === "yes",
-            // Billing info
             billingName: record["Billing Name"],
             billingStreet: record["Billing Street"],
             billingAddress1: record["Billing Address1"],
@@ -378,9 +374,8 @@ export function registerRoutes(app: Express): Server {
             billingCity: record["Billing City"],
             billingZip: record["Billing Zip"],
             billingProvince: record["Billing Province"],
-            billingCountry: record["Billing Country"] || "Unknown",
+            billingCountry: record["Billing Country"],
             billingPhone: record["Billing Phone"],
-            // Shipping info
             shippingName: record["Shipping Name"],
             shippingStreet: record["Shipping Street"],
             shippingAddress1: record["Shipping Address1"],
@@ -389,73 +384,52 @@ export function registerRoutes(app: Express): Server {
             shippingCity: record["Shipping City"],
             shippingZip: record["Shipping Zip"],
             shippingProvince: record["Shipping Province"],
-            shippingCountry: record["Shipping Country"] || "Unknown",
+            shippingCountry: record["Shipping Country"],
             shippingPhone: record["Shipping Phone"]
-          };
+          });
 
-          try {
-            currentCustomer = await storage.createCustomer(customerData);
-          } catch (error) {
-            console.error("Error creating customer:", error);
-            throw new Error(`Failed to create customer: ${error.message}`);
-          }
-
-          // Create order record
-          const orderData = {
+          // Create order with raw data
+          currentOrder = await storage.createOrder({
             orderId: record["Id"],
-            customerId: currentCustomer.id,
+            customerId: customer.id,
             financialStatus: record["Financial Status"],
             paidAt: record["Paid at"] ? new Date(record["Paid at"]) : null,
             fulfillmentStatus: record["Fulfillment Status"],
             fulfilledAt: record["Fulfilled at"] ? new Date(record["Fulfilled at"]) : null,
             currency: record["Currency"],
-            subtotal: parseFloat(record["Subtotal"] || "0"),
-            shipping: parseFloat(record["Shipping"] || "0"),
-            taxes: parseFloat(record["Taxes"] || "0"),
-            total: parseFloat(record["Total"] || "0"),
+            subtotal: record["Subtotal"],
+            shipping: record["Shipping"],
+            taxes: record["Taxes"],
+            total: record["Total"],
             discountCode: record["Discount Code"],
-            discountAmount: parseFloat(record["Discount Amount"] || "0"),
+            discountAmount: record["Discount Amount"],
             shippingMethod: record["Shipping Method"],
             createdAt: new Date(record["Created at"]),
             paymentMethod: record["Payment Method"],
             paymentReference: record["Payment Reference"],
-            refundedAmount: parseFloat(record["Refunded Amount"] || "0"),
-            outstandingBalance: parseFloat(record["Outstanding Balance"] || "0"),
+            refundedAmount: record["Refunded Amount"],
+            outstandingBalance: record["Outstanding Balance"],
             notes: record["Notes"],
             tags: record["Tags"],
             riskLevel: record["Risk Level"],
-            source: record["Source"] || "csv_import"
-          };
-
-          try {
-            currentOrder = await storage.createOrder(orderData);
-          } catch (error) {
-            console.error("Error creating order:", error);
-            throw new Error(`Failed to create order: ${error.message}`);
-          }
+            source: record["Source"]
+          });
         }
 
-        // Always create order item for the current row if it has a line item
+        // Create order item if it exists
         if (currentOrder && record["Lineitem name"]) {
-          const orderItemData = {
+          await storage.createOrderItem({
             orderId: currentOrder.id,
-            quantity: parseInt(record["Lineitem quantity"] || "1"),
+            quantity: record["Lineitem quantity"],
             name: record["Lineitem name"],
-            price: parseFloat(record["Lineitem price"] || "0"),
-            compareAtPrice: parseFloat(record["Lineitem compare at price"] || "0"),
+            price: record["Lineitem price"],
+            compareAtPrice: record["Lineitem compare at price"],
             sku: record["Lineitem sku"],
-            requiresShipping: record["Lineitem requires shipping"]?.toLowerCase() === "true",
-            taxable: record["Lineitem taxable"]?.toLowerCase() === "true",
+            requiresShipping: record["Lineitem requires shipping"],
+            taxable: record["Lineitem taxable"],
             fulfillmentStatus: record["Lineitem fulfillment status"],
-            discount: parseFloat(record["Lineitem discount"] || "0")
-          };
-
-          try {
-            await storage.createOrderItem(orderItemData);
-          } catch (error) {
-            console.error("Error creating order item:", error);
-            throw new Error(`Failed to create order item: ${error.message}`);
-          }
+            discount: record["Lineitem discount"]
+          });
         }
       }
 

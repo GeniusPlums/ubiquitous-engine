@@ -5,12 +5,12 @@ import { z } from "zod";
 // Existing tables remain unchanged until segments table
 export const customers = pgTable("customers", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
+  name: text("name"),
   email: text("email"),
   phone: text("phone"),
   acceptsMarketing: boolean("accepts_marketing").default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  // Billing info
+  // Billing info - all fields optional
   billingName: text("billing_name"),
   billingStreet: text("billing_street"),
   billingAddress1: text("billing_address1"),
@@ -21,7 +21,7 @@ export const customers = pgTable("customers", {
   billingProvince: text("billing_province"),
   billingCountry: text("billing_country"),
   billingPhone: text("billing_phone"),
-  // Shipping info
+  // Shipping info - all fields optional
   shippingName: text("shipping_name"),
   shippingStreet: text("shipping_street"),
   shippingAddress1: text("shipping_address1"),
@@ -323,7 +323,7 @@ export const insertSegmentAnalyticsSchema = createInsertSchema(segmentAnalytics)
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
   createdAt: true
-});
+}).partial();
 
 export const insertOrderSchema = createInsertSchema(orders).omit({
   id: true
