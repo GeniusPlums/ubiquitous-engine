@@ -300,13 +300,23 @@ export default function Segments() {
           queryClient.invalidateQueries({ queryKey: ["/api/segments"] });
           toast({
             title: "Import Successful",
-            description: `Successfully imported ${result.importedCount} customer records. ${result.skippedCount ? `\nSkipped ${result.skippedCount} records due to validation errors.` : ''}`,
+            description: `Successfully imported ${result.importedCount} customer records.
+            ${result.duplicateCount ? `\nSkipped ${result.duplicateCount} duplicate records.` : ''}
+            ${result.skippedCount ? `\nSkipped ${result.skippedCount} invalid records.` : ''}`,
           });
           // Reset file input
           event.target.value = '';
         } else {
-          const error = await response.text();
-          throw new Error(error);
+          const error = await response.json();
+          if (error.code === '23505') { // PostgreSQL duplicate key error
+            toast({
+              title: "Duplicate Records Found",
+              description: "Some records already exist in the database. Please review your data and try again.",
+              variant: "destructive",
+            });
+          } else {
+            throw new Error(error.message || "Failed to import data");
+          }
         }
       } catch (error) {
         toast({
