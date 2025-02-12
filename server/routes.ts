@@ -373,7 +373,7 @@ export function registerRoutes(app: Express): Server {
             billingCompany: record["Billing Company"],
             billingCity: record["Billing City"],
             billingZip: record["Billing Zip"],
-            billingProvince: record["Billing Province"],
+            billingProvince: record["Billing Province Name"] || record["Billing Province"],
             billingCountry: record["Billing Country"],
             billingPhone: record["Billing Phone"],
             shippingName: record["Shipping Name"],
@@ -383,7 +383,7 @@ export function registerRoutes(app: Express): Server {
             shippingCompany: record["Shipping Company"],
             shippingCity: record["Shipping City"],
             shippingZip: record["Shipping Zip"],
-            shippingProvince: record["Shipping Province"],
+            shippingProvince: record["Shipping Province Name"] || record["Shipping Province"],
             shippingCountry: record["Shipping Country"],
             shippingPhone: record["Shipping Phone"]
           });
