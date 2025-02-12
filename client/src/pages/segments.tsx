@@ -53,20 +53,19 @@ const conditionSchema = z.object({
   timeframe: z.string().optional(),
 });
 
+// Update the form schema to match the server expectations
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  type: z.enum(["manual", "ai", "dynamic"]),
+  type: z.enum(["manual", "ai"]).default("manual"),
   conditions: z.array(z.object({
-    group: z.array(conditionSchema),
-    logicOperator: z.enum(["AND", "OR"]).default("AND"),
+    field: z.string(),
+    operator: z.string(),
+    value: z.any(),
+    type: z.string().optional(),
+    timeframe: z.string().optional()
   })).optional(),
   aiPrompt: z.string().optional(),
-  behaviorRules: z.array(z.object({
-    event: z.string(),
-    threshold: z.number(),
-    timeframe: z.string(),
-  })).optional(),
 });
 
 const AVAILABLE_FIELDS = [
@@ -125,7 +124,7 @@ const BEHAVIOR_EVENTS = [
 ];
 
 export default function Segments() {
-  const [activeTab, setActiveTab] = useState<"manual" | "ai" | "dynamic">("manual");
+  const [activeTab, setActiveTab] = useState<"manual" | "ai">("manual");
   const queryClient = useQueryClient();
 
   const { data: segments } = useQuery<Segment[]>({
@@ -135,20 +134,40 @@ export default function Segments() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      name: "",
+      description: "",
       type: "manual",
-      conditions: [{ group: [], logicOperator: "AND" }],
-      behaviorRules: [],
+      conditions: [],
     },
   });
 
   const createSegment = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
+      // Ensure the type is set based on the active tab
+      const dataToSend = {
+        ...values,
+        type: activeTab,
+        // Transform conditions to match server expectations
+        conditions: values.conditions?.map(condition => ({
+          field: condition.field,
+          operator: condition.operator,
+          value: condition.value,
+          type: condition.type || "string",
+          timeframe: condition.timeframe
+        })) || []
+      };
+
       const response = await fetch("/api/segments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify(dataToSend),
       });
-      if (!response.ok) throw new Error("Failed to create segment");
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to create segment");
+      }
+
       return response.json();
     },
     onSuccess: () => {
@@ -159,10 +178,10 @@ export default function Segments() {
       });
       form.reset();
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: "Error",
-        description: "Failed to create segment",
+        description: error instanceof Error ? error.message : "Failed to create segment",
         variant: "destructive",
       });
     },
@@ -333,6 +352,10 @@ export default function Segments() {
   };
 
   // Update the CSV import guidelines in the card
+  const onSubmit = (data: z.infer<typeof formSchema>) => {
+    createSegment.mutate(data);
+  };
+
   return (
     <div className="container mx-auto py-8">
       <div className="flex justify-between items-center mb-8">
@@ -384,7 +407,7 @@ export default function Segments() {
             <CardDescription>Create a new audience segment</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "manual" | "ai" | "dynamic")}>
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "manual" | "ai")}>
               <TabsList className="mb-4">
                 <TabsTrigger value="manual">
                   <Filter className="h-4 w-4 mr-2" />
@@ -394,14 +417,10 @@ export default function Segments() {
                   <Brain className="h-4 w-4 mr-2" />
                   AI-Powered
                 </TabsTrigger>
-                <TabsTrigger value="dynamic">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Dynamic
-                </TabsTrigger>
               </TabsList>
 
               <Form {...form}>
-                <form onSubmit={form.handleSubmit((data) => createSegment.mutate(data))} className="space-y-4">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
                     name="name"
@@ -634,104 +653,6 @@ export default function Segments() {
                         onClick={addConditionGroup}
                       >
                         Add Condition Group
-                      </Button>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="dynamic">
-                    <div className="space-y-4">
-                      {form.watch("behaviorRules")?.map((rule, index) => (
-                        <div key={index} className="flex gap-2 items-start">
-                          <FormField
-                            control={form.control}
-                            name={`behaviorRules.${index}.event`}
-                            render={({ field }) => (
-                              <FormItem className="flex-1">
-                                <Select
-                                  value={field.value}
-                                  onValueChange={field.onChange}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select event" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {BEHAVIOR_EVENTS.map((event) => (
-                                      <SelectItem
-                                        key={event.value}
-                                        value={event.value}
-                                      >
-                                        {event.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name={`behaviorRules.${index}.threshold`}
-                            render={({ field }) => (
-                              <FormItem className="flex-1">
-                                <FormControl>
-                                  <Input
-                                    {...field}
-                                    type="number"
-                                    min="1"
-                                    placeholder="Threshold"
-                                    onChange={(e) =>
-                                      field.onChange(parseInt(e.target.value))
-                                    }
-                                  />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name={`behaviorRules.${index}.timeframe`}
-                            render={({ field }) => (
-                              <FormItem className="flex-1">
-                                <Select
-                                  value={field.value}
-                                  onValueChange={field.onChange}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select timeframe" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {TIME_UNITS.map((unit) => (
-                                      <SelectItem
-                                        key={unit.value}
-                                        value={`${7} ${unit.value}`}
-                                      >
-                                        Last {7} {unit.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </FormItem>
-                            )}
-                          />
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeBehaviorRule(index)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={addBehaviorRule}
-                      >
-                        Add Behavior Rule
                       </Button>
                     </div>
                   </TabsContent>
