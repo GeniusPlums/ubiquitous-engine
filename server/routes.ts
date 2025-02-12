@@ -343,7 +343,8 @@ export function registerRoutes(app: Express): Server {
       const parser = parse(fileContent, {
         columns: true,
         skip_empty_lines: true,
-        trim: true
+        trim: true,
+        skipEmptyLines: true
       });
 
       for await (const record of parser) {
@@ -364,30 +365,32 @@ export function registerRoutes(app: Express): Server {
 
           // Create customer record
           const customerData = {
-            name: record["Name"] || "",
-            email: record["Email"] || "",
-            phone: record["Phone"] || "",
+            name: record["Name"],
+            email: record["Email"],
+            phone: record["Phone"],
             acceptsMarketing: record["Accepts Marketing"]?.toLowerCase() === "yes",
-            billingName: record["Billing Name"] || "",
-            billingStreet: record["Billing Street"] || "",
-            billingAddress1: record["Billing Address1"] || "",
-            billingAddress2: record["Billing Address2"] || "",
-            billingCompany: record["Billing Company"] || "",
-            billingCity: record["Billing City"] || "",
-            billingZip: record["Billing Zip"] || "",
-            billingProvince: record["Billing Province"] || "",
-            billingCountry: record["Billing Country"] || "",
-            billingPhone: record["Billing Phone"] || "",
-            shippingName: record["Shipping Name"] || "",
-            shippingStreet: record["Shipping Street"] || "",
-            shippingAddress1: record["Shipping Address1"] || "",
-            shippingAddress2: record["Shipping Address2"] || "",
-            shippingCompany: record["Shipping Company"] || "",
-            shippingCity: record["Shipping City"] || "",
-            shippingZip: record["Shipping Zip"] || "",
-            shippingProvince: record["Shipping Province"] || "",
-            shippingCountry: record["Shipping Country"] || "",
-            shippingPhone: record["Shipping Phone"] || ""
+            // Billing info
+            billingName: record["Billing Name"],
+            billingStreet: record["Billing Street"],
+            billingAddress1: record["Billing Address1"],
+            billingAddress2: record["Billing Address2"],
+            billingCompany: record["Billing Company"],
+            billingCity: record["Billing City"],
+            billingZip: record["Billing Zip"],
+            billingProvince: record["Billing Province"],
+            billingCountry: record["Billing Country"],
+            billingPhone: record["Billing Phone"],
+            // Shipping info
+            shippingName: record["Shipping Name"],
+            shippingStreet: record["Shipping Street"],
+            shippingAddress1: record["Shipping Address1"],
+            shippingAddress2: record["Shipping Address2"],
+            shippingCompany: record["Shipping Company"],
+            shippingCity: record["Shipping City"],
+            shippingZip: record["Shipping Zip"],
+            shippingProvince: record["Shipping Province"],
+            shippingCountry: record["Shipping Country"],
+            shippingPhone: record["Shipping Phone"]
           };
 
           currentCustomer = await storage.createCustomer(customerData);
@@ -396,26 +399,26 @@ export function registerRoutes(app: Express): Server {
           const orderData = {
             orderId: record["Id"],
             customerId: currentCustomer.id,
-            financialStatus: record["Financial Status"] || "pending",
+            financialStatus: record["Financial Status"],
             paidAt: record["Paid at"] ? new Date(record["Paid at"]) : null,
-            fulfillmentStatus: record["Fulfillment Status"] || "unfulfilled",
+            fulfillmentStatus: record["Fulfillment Status"],
             fulfilledAt: record["Fulfilled at"] ? new Date(record["Fulfilled at"]) : null,
-            currency: record["Currency"] || "USD",
+            currency: record["Currency"],
             subtotal: parseFloat(record["Subtotal"] || "0"),
             shipping: parseFloat(record["Shipping"] || "0"),
             taxes: parseFloat(record["Taxes"] || "0"),
             total: parseFloat(record["Total"] || "0"),
-            discountCode: record["Discount Code"] || "",
+            discountCode: record["Discount Code"],
             discountAmount: parseFloat(record["Discount Amount"] || "0"),
-            shippingMethod: record["Shipping Method"] || "",
-            createdAt: record["Created at"] ? new Date(record["Created at"]) : new Date(),
-            paymentMethod: record["Payment Method"] || "",
-            paymentReference: record["Payment Reference"] || "",
+            shippingMethod: record["Shipping Method"],
+            createdAt: new Date(record["Created at"]),
+            paymentMethod: record["Payment Method"],
+            paymentReference: record["Payment Reference"],
             refundedAmount: parseFloat(record["Refunded Amount"] || "0"),
             outstandingBalance: parseFloat(record["Outstanding Balance"] || "0"),
-            notes: record["Notes"] || "",
-            tags: record["Tags"] || "",
-            riskLevel: record["Risk Level"] || "low",
+            notes: record["Notes"],
+            tags: record["Tags"],
+            riskLevel: record["Risk Level"],
             source: record["Source"] || "csv_import"
           };
 
@@ -427,10 +430,10 @@ export function registerRoutes(app: Express): Server {
           const orderItemData = {
             orderId: currentOrder.id,
             quantity: parseInt(record["Lineitem quantity"] || "1"),
-            name: record["Lineitem name"] || "",
+            name: record["Lineitem name"],
             price: parseFloat(record["Lineitem price"] || "0"),
             compareAtPrice: parseFloat(record["Lineitem compare at price"] || "0"),
-            sku: record["Lineitem sku"] || "",
+            sku: record["Lineitem sku"],
             requiresShipping: record["Lineitem requires shipping"]?.toLowerCase() === "true",
             taxable: record["Lineitem taxable"]?.toLowerCase() === "true",
             fulfillmentStatus: record["Lineitem fulfillment status"] || "pending",
@@ -441,9 +444,9 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      res.json({ 
-        message: "Import completed successfully", 
-        recordsProcessed: records.length 
+      res.json({
+        message: "Import completed successfully",
+        recordsProcessed: records.length
       });
     } catch (error: any) {
       console.error("Import error:", error);
@@ -463,8 +466,8 @@ export function registerRoutes(app: Express): Server {
 
       // Generate CSV content
       const headers = Object.keys(members[0].attributes).join(",");
-      const rows = members.map(member => 
-        Object.values(member.attributes).map(value => 
+      const rows = members.map(member =>
+        Object.values(member.attributes).map(value =>
           typeof value === "string" ? `"${value}"` : value
         ).join(",")
       );
